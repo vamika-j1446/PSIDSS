@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Briefcase, ArrowUpRight, TrendingUp, AlertTriangle, Filter, AlertCircle, CheckCircle } from 'lucide-react';
+import { 
+  Briefcase, ArrowUpRight, TrendingUp, AlertTriangle, Filter, AlertCircle, CheckCircle, Info, ShieldAlert
+} from 'lucide-react';
 
 export default function Recommendations({ token, selectedYear }) {
   const [recs, setRecs] = useState([]);
@@ -8,18 +10,8 @@ export default function Recommendations({ token, selectedYear }) {
   const [error, setError] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
   
-  // Interactive strategy initiation tracking
-  const [activeStrategies, setActiveStrategies] = useState([]);
-  const [toastMessage, setToastMessage] = useState('');
-
-  const initiateStrategy = (id, title) => {
-    if (activeStrategies.includes(id)) return;
-    setActiveStrategies(prev => [...prev, id]);
-    setToastMessage(`Strategy "${title}" has been successfully initiated and deployed to live operations!`);
-    setTimeout(() => {
-      setToastMessage('');
-    }, 4500);
-  };
+  // Accordion details tracking
+  const [expandedRecs, setExpandedRecs] = useState({});
 
   useEffect(() => {
     const fetchRecs = async () => {
@@ -37,6 +29,13 @@ export default function Recommendations({ token, selectedYear }) {
 
     fetchRecs();
   }, [token, selectedYear]);
+
+  const toggleRec = (id) => {
+    setExpandedRecs(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
 
   if (loading) {
     return (
@@ -70,40 +69,81 @@ export default function Recommendations({ token, selectedYear }) {
     : recs.filter(r => r.category === categoryFilter);
 
   const getImpactBadgeClass = (impact) => {
-    const imp = String(impact).toLowerCase();
-    if (imp.includes('critical')) return 'bg-red-500/10 text-red-400 border border-red-800/20';
-    if (imp.includes('high')) return 'bg-orange-500/10 text-orange-400 border border-orange-800/20';
-    return 'bg-yellow-500/10 text-yellow-400 border border-yellow-800/20';
+    const imp = String(impact).toUpperCase();
+    if (imp.includes('HIGH') || imp.includes('CRITICAL')) {
+      return 'bg-red-500/10 text-red-400 border border-red-800/20';
+    }
+    if (imp.includes('MEDIUM')) {
+      return 'bg-yellow-500/10 text-yellow-400 border border-yellow-800/20';
+    }
+    return 'bg-emerald-500/10 text-emerald-400 border border-emerald-800/20';
   };
+
+  const getFilterCount = (cat) => {
+    if (cat === 'All') return recs.length;
+    return recs.filter(r => r.category === cat).length;
+  };
+
+  // Strategic priorities counts
+  const highImpactCount = recs.filter(r => r.impact.includes('HIGH') || r.impact.includes('CRITICAL')).length;
+  const mediumImpactCount = recs.filter(r => r.impact.includes('MEDIUM')).length;
+  const retentionAlerts = recs.filter(r => r.category === 'Retention').length;
+  const growthOpportunities = recs.filter(r => r.category === 'Opportunities').length;
 
   return (
     <div class="space-y-8 animate-fade-in relative">
       {/* Header & Category Filters */}
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-slate-900 pb-5">
         <div>
           <h2 class="text-3xl font-extrabold text-white tracking-tight">Executive Advisory Briefings</h2>
           <p class="text-slate-400 text-sm mt-1">Data-driven strategic recommendations, operations optimization, and risk mitigation strategies.</p>
         </div>
 
         {/* Filters */}
-        <div class="flex items-center gap-2 bg-slate-900/80 p-1.5 rounded-xl border border-slate-800 self-start text-xs">
+        <div class="flex items-center gap-2 bg-slate-900/80 p-1.5 rounded-xl border border-slate-800 self-start text-xs overflow-x-auto max-w-full">
           <Filter class="h-3.5 w-3.5 text-slate-500 ml-2 shrink-0" />
           <div class="flex gap-1">
             {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCategoryFilter(cat)}
-                class={`px-3 py-1 rounded-lg font-medium transition-all ${
+                class={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer shrink-0 ${
                   categoryFilter === cat 
-                    ? 'bg-blue-600 text-white shadow' 
+                    ? 'bg-blue-600 text-white shadow shadow-blue-500/20' 
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                {cat}
+                {cat} ({getFilterCount(cat)})
               </button>
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Summary Box */}
+      <div class="p-6 rounded-2xl glass-panel border border-slate-800/80 bg-slate-950/20 space-y-4 glow-violet">
+        <h4 class="text-sm font-bold text-white uppercase tracking-wider">Strategic Priorities</h4>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-semibold">
+          <div class="p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col justify-between">
+            <span class="text-slate-400 text-[10px] uppercase block mb-1">High Impact</span>
+            <span class="text-sm font-bold text-red-400">{highImpactCount}</span>
+          </div>
+          <div class="p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col justify-between">
+            <span class="text-slate-400 text-[10px] uppercase block mb-1">Medium Impact</span>
+            <span class="text-sm font-bold text-yellow-400">{mediumImpactCount}</span>
+          </div>
+          <div class="p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col justify-between">
+            <span class="text-slate-400 text-[10px] uppercase block mb-1">Customer Retention</span>
+            <span class="text-sm font-bold text-blue-400">{retentionAlerts} Alert{retentionAlerts !== 1 ? 's' : ''}</span>
+          </div>
+          <div class="p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col justify-between">
+            <span class="text-slate-400 text-[10px] uppercase block mb-1">Opportunities</span>
+            <span class="text-sm font-bold text-emerald-400">{growthOpportunities} Growth Segment{growthOpportunities !== 1 ? 's' : ''}</span>
+          </div>
+        </div>
+        <p class="text-[10px] text-slate-500 italic">
+          These recommendations are generated from uploaded Cochin Port billing records.
+        </p>
       </div>
 
       {/* Advisory list */}
@@ -120,23 +160,22 @@ export default function Recommendations({ token, selectedYear }) {
           </div>
         ) : (
           filteredRecs.map((rec) => {
-            const borderClass = rec.impact.toLowerCase().includes('critical')
+            const isHigh = rec.impact.toUpperCase().includes('HIGH') || rec.impact.toUpperCase().includes('CRITICAL');
+            const borderClass = isHigh
               ? 'border-l-4 border-l-red-500'
-              : rec.impact.toLowerCase().includes('high')
-              ? 'border-l-4 border-l-orange-500'
               : 'border-l-4 border-l-yellow-500';
 
-            const isActive = activeStrategies.includes(rec.id);
+            const isExpanded = !!expandedRecs[rec.id];
 
             return (
               <div 
                 key={rec.id} 
-                class={`p-6 rounded-2xl glass-panel flex flex-col justify-between hover:shadow-[0_0_20px_rgba(59,130,246,0.08)] hover:-translate-y-0.5 transition-all duration-300 border border-slate-900/60 ${borderClass}`}
+                class={`p-6 rounded-2xl glass-panel flex flex-col justify-between hover:shadow-[0_0_20px_rgba(59,130,246,0.08)] transition-all duration-300 border border-slate-900/60 ${borderClass}`}
               >
-                <div class="space-y-4">
-                  {/* Header: Category & Impact */}
+                <div class="space-y-3.5">
+                  {/* Category & Impact Row */}
                   <div class="flex items-center justify-between">
-                    <span class="text-[10px] font-extrabold uppercase tracking-wider text-blue-400 bg-blue-500/5 px-2.5 py-1 border border-blue-500/10 rounded-lg">
+                    <span class="text-[9px] font-extrabold uppercase tracking-wider text-blue-400 bg-blue-500/5 px-2.5 py-1 border border-blue-500/10 rounded-lg">
                       {rec.category}
                     </span>
                     <span class={`px-2 py-0.5 text-[9px] font-extrabold uppercase rounded ${getImpactBadgeClass(rec.impact)}`}>
@@ -145,45 +184,51 @@ export default function Recommendations({ token, selectedYear }) {
                   </div>
 
                   {/* Title */}
-                  <h3 class="text-lg font-bold text-white leading-snug">
+                  <h3 class="text-base font-bold text-white leading-snug">
                     {rec.title}
                   </h3>
 
-                  {/* 3-Part Structured Brief */}
-                  <div class="space-y-3 pt-1 text-xs">
-                    {/* Evidence */}
-                    <div class="flex items-start gap-2">
-                      <span class="text-slate-500 font-bold shrink-0 mt-0.5">EVIDENCE:</span>
-                      <p class="text-slate-300 leading-relaxed font-medium">{rec.evidence}</p>
+                  {/* Structured Core Points */}
+                  <div class="space-y-2 text-xs font-semibold">
+                    <div>
+                      <span class="text-[9px] text-slate-500 uppercase block tracking-wider mb-0.5">Problem</span>
+                      <p class="text-[11px] text-slate-300 leading-normal font-medium">{rec.shortProblem || 'Significant billing variance identified.'}</p>
                     </div>
 
-                    {/* Action Plan */}
-                    <div class="flex items-start gap-2 bg-slate-950/40 p-3 rounded-xl border border-slate-900">
-                      <span class="text-blue-400 font-bold shrink-0">ACTION:</span>
-                      <p class="text-slate-200 leading-relaxed font-semibold">{rec.action}</p>
+                    <div class="p-2.5 bg-slate-950/60 border border-slate-900 rounded-lg w-fit">
+                      <span class="text-[9px] text-blue-400 uppercase block tracking-wider mb-0.5">Key Evidence</span>
+                      <p class="text-[11px] text-slate-100 font-mono font-bold leading-normal">{rec.evidence}</p>
                     </div>
 
-                    {/* Expected Benefit */}
-                    <div class="flex items-center gap-2 pt-1">
-                      <span class="text-emerald-400 font-bold shrink-0">EXPECTED BENEFIT:</span>
-                      <p class="text-emerald-300 font-semibold">{rec.benefit}</p>
+                    <div>
+                      <span class="text-[9px] text-slate-500 uppercase block tracking-wider mb-0.5">Recommended Action</span>
+                      <p class="text-[11px] text-slate-200 leading-normal font-bold">{rec.action}</p>
+                    </div>
+
+                    <div>
+                      <span class="text-[9px] text-emerald-400 uppercase block tracking-wider mb-0.5">Expected Benefit</span>
+                      <p class="text-[11px] text-emerald-300 leading-normal font-bold">{rec.benefit}</p>
                     </div>
                   </div>
                 </div>
 
-                {/* Action Button */}
-                <div class="border-t border-slate-900/60 mt-5 pt-4 flex items-center justify-end">
-                  {isActive ? (
-                    <span class="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
-                      ✓ Strategy Active
-                    </span>
-                  ) : (
-                    <button 
-                      onClick={() => initiateStrategy(rec.id, rec.title)}
-                      class="bg-blue-600/10 hover:bg-blue-600 border border-blue-500/20 hover:border-blue-500 text-blue-400 hover:text-white px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all focus:outline-none"
-                    >
-                      Initiate Strategy <ArrowUpRight class="h-3.5 w-3.5" />
-                    </button>
+                {/* Accordion Expand Details */}
+                <div class="border-t border-slate-900/60 mt-5 pt-4">
+                  <button 
+                    onClick={() => toggleRec(rec.id)}
+                    class="bg-blue-600/10 hover:bg-blue-600 border border-blue-500/20 hover:border-blue-500 text-blue-400 hover:text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none cursor-pointer self-start"
+                  >
+                    {isExpanded ? 'Hide Action Plan' : 'View Action Plan'}
+                  </button>
+
+                  {isExpanded && (
+                    <div class="mt-4 p-3 bg-slate-950/80 border border-slate-900 rounded-xl space-y-1.5 text-slate-400 text-[10px] leading-relaxed font-medium animate-fade-in">
+                      <p>{rec.explanation || 'Detailed tactical recommendations are computed from billing transaction volumes and terminal log concentration indexes.'}</p>
+                      <div class="flex items-center gap-1.5 text-slate-500 border-t border-slate-900 pt-2 mt-2">
+                        <Info class="h-3.5 w-3.5" />
+                        <span>Source context derived strictly from uploaded Cochin Port records.</span>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -191,19 +236,6 @@ export default function Recommendations({ token, selectedYear }) {
           })
         )}
       </div>
-
-      {/* Floating Strategy Activation Toast Alert */}
-      {toastMessage && (
-        <div class="fixed bottom-6 right-6 z-50 p-4 bg-slate-950 border border-emerald-500/30 text-white rounded-xl shadow-2xl flex items-center gap-3 animate-slide-in glow-emerald max-w-md">
-          <div class="p-1.5 bg-emerald-500/15 text-emerald-400 rounded-lg shrink-0">
-            <CheckCircle class="h-5 w-5" />
-          </div>
-          <div>
-            <span class="text-xs font-bold block text-emerald-400 uppercase tracking-wider">Strategy Deployed</span>
-            <p class="text-slate-300 text-xs mt-0.5 font-medium leading-relaxed">{toastMessage}</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

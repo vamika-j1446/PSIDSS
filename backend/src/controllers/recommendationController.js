@@ -14,7 +14,7 @@ const recommendationController = {
   getRecommendations: async (req, res) => {
     try {
       const yearScope = req.query.year || 'All';
-      const cacheKey = `recommendations_v2_${yearScope}`;
+      const cacheKey = `recommendations_v3_${yearScope}`;
       const cached = cache.get(cacheKey);
       if (cached) {
         return res.json(cached);
@@ -113,16 +113,13 @@ const recommendationController = {
           retentionCard = {
             id: `customer-retention-${c.party_name}`,
             category: 'Retention',
-            impact: 'High Impact',
+            impact: 'HIGH IMPACT',
             title: 'Re-engage declining high-value customer',
-            evidence: `${c.party_name} revenue decreased from ${formatCurrencyMsg(prevRevenueVal)} in FY${prevYr} to ${formatCurrencyMsg(latestRevenueVal)} in FY${latestYr}, a decline of ${declineVal.toFixed(1)}%.`,
-            action: 'Schedule customer review, identify causes for reduced billing volume, and offer customized volume-based discounts.',
-            benefit: 'Protects recurring revenue and improves high-value customer retention.',
-            metrics: {
-              previousRevenue: prevRevenueVal,
-              latestRevenue: latestRevenueVal,
-              declinePercent: parseFloat(declineVal.toFixed(2))
-            }
+            shortProblem: 'Some billing partners show YoY revenue contraction.',
+            evidence: `${c.party_name}: ${formatCurrencyMsg(prevRevenueVal)} → ${formatCurrencyMsg(latestRevenueVal)} (-${declineVal.toFixed(0)}%)`,
+            action: 'Review reasons for reduced billing and plan follow-up.',
+            benefit: 'Protects recurring customer revenue.',
+            explanation: `Automated audit indicates customer ${c.party_name} had a significant drop of ${declineVal.toFixed(1)}% YoY in billing value. Retention planning is advised.`
           };
         }
       }
@@ -173,15 +170,13 @@ const recommendationController = {
           commodityCard = {
             id: `commodity-advisory-${topCategory.name}`,
             category: 'Commodity / Cargo',
-            impact: 'Medium Impact',
+            impact: 'MEDIUM IMPACT',
             title: 'Strengthen high-performing revenue categories',
-            evidence: `Category '${topCategory.name}' is the top revenue group, contributing ${formatCurrencyMsg(topCategory.latestRev)} representing ${topCategoryShare.toFixed(2)}% of total selected-scope revenue in FY${latestYr}.`,
-            action: `Promote high-margin handling agreements for '${topCategory.name}' and align dedicated warehousing to retain volume contracts.`,
-            benefit: 'Secures and anchors the port\'s core cargo cargo volume segments.',
-            metrics: {
-              revenue: topCategory.latestRev,
-              share: parseFloat(topCategoryShare.toFixed(2))
-            }
+            shortProblem: 'Core commodity segments represent majority billing concentration.',
+            evidence: `${topCategory.name} is the top revenue group (${topCategoryShare.toFixed(1)}% of selected revenue).`,
+            action: 'Monitor high-performing commodity groups and track declining categories.',
+            benefit: 'Supports core cargo revenue planning.',
+            explanation: `The commodity group '${topCategory.name}' stands out as the primary billing driver. Ongoing categorization helps manage tariff volatility.`
           };
         }
       }
@@ -194,7 +189,6 @@ const recommendationController = {
         const firstR = yearlyRevenues[0];
         const latestR = yearlyRevenues[yearlyRevenues.length - 1];
         const prevR = yearlyRevenues[yearlyRevenues.length - 2];
-        const cagr = ((latestR.revenue / firstR.revenue) ** (1 / (yearlyRevenues.length - 1)) - 1) * 100;
         const YoY_latest = ((latestR.revenue - prevR.revenue) / prevR.revenue) * 100;
 
         if (yearlyRevenues.length >= 3) {
@@ -204,72 +198,70 @@ const recommendationController = {
             recommendations.push({
               id: 'revenue-growth-slowing',
               category: 'Revenue Growth',
-              impact: 'High Impact',
+              impact: 'HIGH IMPACT',
               title: 'Investigate slowing revenue growth',
-              evidence: `Latest YoY growth slowed to ${YoY_latest.toFixed(2)}% compared to ${YoY_prev.toFixed(2)}% in the previous period.`,
-              action: 'Review declining customers, commodities, and berths to identify billing leakages or volume drops.',
-              benefit: 'Identifies leakage areas early to restore historical growth rates.'
+              shortProblem: 'YoY growth rate has contracted compared to the previous period.',
+              evidence: `YoY growth slowed: ${YoY_prev.toFixed(2)}% → ${YoY_latest.toFixed(2)}%`,
+              action: 'Review customers, commodity groups, and berths with declining revenue.',
+              benefit: 'Helps restore stronger growth.',
+              explanation: `Regression indicators flag that latest YoY growth (${YoY_latest.toFixed(1)}%) is lower than previous period (${YoY_prev.toFixed(1)}%). Volatility review is recommended.`
             });
           } else {
             recommendations.push({
               id: 'revenue-growth-momentum',
               category: 'Revenue Growth',
-              impact: 'Medium Impact',
+              impact: 'MEDIUM IMPACT',
               title: 'Maintain revenue growth momentum',
-              evidence: `Revenue increased from ${formatCurrencyMsg(firstR.revenue)} in FY${firstR.year} to ${formatCurrencyMsg(latestR.revenue)} in FY${latestR.year}, achieving a CAGR of ${cagr.toFixed(2)}%.`,
-              action: 'Focus business development on the highest-growing revenue categories, berths, and customers.',
-              benefit: 'Maintains long-term compounding revenue growth and port market share.'
+              shortProblem: 'Port billing trend indicates active positive expansion.',
+              evidence: `YoY growth: ${YoY_latest.toFixed(2)}%`,
+              action: 'Review customers, commodity groups, and berths with declining revenue.',
+              benefit: 'Helps restore stronger growth.',
+              explanation: `Billing logs verify positive revenue momentum. Focus on maintaining operational billing performance.`
             });
           }
         } else {
           recommendations.push({
             id: 'revenue-growth-momentum',
             category: 'Revenue Growth',
-            impact: 'Medium Impact',
+            impact: 'MEDIUM IMPACT',
             title: 'Maintain revenue growth momentum',
-            evidence: `Revenue increased from ${formatCurrencyMsg(firstR.revenue)} in FY${firstR.year} to ${formatCurrencyMsg(latestR.revenue)} in FY${latestR.year}, achieving YoY growth of ${YoY_latest.toFixed(2)}%.`,
-            action: 'Focus business development on the highest-growing revenue categories, berths, and customers.',
-            benefit: 'Maintains long-term compounding revenue growth and port market share.'
+            shortProblem: 'Port billing trend indicates active positive expansion.',
+            evidence: `YoY growth: ${YoY_latest.toFixed(2)}%`,
+            action: 'Review customers, commodity groups, and berths with declining revenue.',
+            benefit: 'Helps restore stronger growth.',
+            explanation: `Billing logs verify positive revenue momentum. Focus on maintaining operational billing performance.`
           });
         }
       }
 
-      // 2. Customer Concentration
+      // 2. Customer Concentration (Customer Risk)
       if (customerRevenues.length > 0) {
-        const top1 = parseFloat(customerRevenues[0].revenue);
         const top5 = customerRevenues.slice(0, 5).reduce((sum, c) => sum + parseFloat(c.revenue), 0);
-        const top1Share = (top1 / totalRevenue) * 100;
         const top5Share = (top5 / totalRevenue) * 100;
 
-        if (top1Share > 25 || top5Share > 60) {
+        if (top5Share > 40) {
           recommendations.push({
             id: 'customer-concentration-high',
             category: 'Customer Risk',
-            impact: 'High Impact',
-            title: 'Reduce customer concentration risk',
-            evidence: `The top customer contributes ${top1Share.toFixed(2)}% and the top 5 customers contribute ${top5Share.toFixed(2)}% of total selected-scope revenue.`,
-            action: 'Actively market port services to secondary and mid-tier liners to diversify carrier risk.',
-            benefit: 'Reduces structural dependency on a small cohort of major customers.'
-          });
-        } else if (top5Share >= 40 && top5Share <= 60) {
-          recommendations.push({
-            id: 'customer-concentration-medium',
-            category: 'Customer Risk',
-            impact: 'Medium Impact',
+            impact: 'HIGH IMPACT',
             title: 'Monitor customer concentration',
-            evidence: `The top 5 customers contribute ${top5Share.toFixed(2)}% of total selected-scope revenue, indicating moderate revenue concentration.`,
-            action: 'Offer volume incentives for mid-size operators to expand their share.',
-            benefit: 'Protects port revenue stability against single-carrier disruption.'
+            shortProblem: 'The top 5 customers represent a large share of overall billing.',
+            evidence: `Top 5 customers share: ${top5Share.toFixed(1)}% of selected revenue`,
+            action: 'Monitor top customer dependency and maintain engagement with key accounts.',
+            benefit: 'Reduces risk from single-customer revenue loss.',
+            explanation: `Billing concentration HHI diagnostics reveal dependency on a small cohort of major customers.`
           });
         } else {
           recommendations.push({
             id: 'customer-concentration-low',
             category: 'Customer Risk',
-            impact: 'Low Impact',
+            impact: 'LOW IMPACT',
             title: 'Customer base is reasonably diversified',
-            evidence: `The top 5 customers represent only ${top5Share.toFixed(2)}% of total selected-scope revenue.`,
-            action: 'Continue standard relationship management with top carriers.',
-            benefit: 'Low concentration risk ensures stable revenue flows.'
+            shortProblem: 'Port billing is well diversified across shipping lines.',
+            evidence: `Top 5 customers represent only ${top5Share.toFixed(1)}% of total selected-scope revenue.`,
+            action: 'Monitor top customer dependency and maintain engagement with key accounts.',
+            benefit: 'Reduces risk from single-customer revenue loss.',
+            explanation: `Diversification index indicates low carrier concentration risk for this selected period.`
           });
         }
       }
@@ -279,18 +271,20 @@ const recommendationController = {
         recommendations.push(retentionCard);
       }
 
-      // 4. High Value Customer
+      // 4. High Value Customer (Opportunities)
       if (customerRevenues.length > 0) {
         const topCust = customerRevenues[0];
         const topShare = (parseFloat(topCust.revenue) / totalRevenue) * 100;
         recommendations.push({
           id: 'high-value-customer-protect',
           category: 'Opportunities',
-          impact: 'High Impact',
+          impact: 'HIGH IMPACT',
           title: 'Protect high-value customer relationships',
-          evidence: `Top customer ${topCust.party_name} contributed ${formatCurrencyMsg(topCust.revenue)}, representing ${topShare.toFixed(2)}% of total selected-scope revenue.`,
-          action: 'Prioritize key account management, negotiate long-term MVC contracts, and guarantee premium berth service levels.',
-          benefit: "Secures stable core revenue and prevents attrition of the port's primary customer."
+          shortProblem: 'Highest billing contributor represents a core percentage of earnings.',
+          evidence: `Top customer share: ${topShare.toFixed(1)}% of selected revenue`,
+          action: 'Protect high-value customer relationships and monitor revenue share.',
+          benefit: 'Supports stable core revenue.',
+          explanation: `Billing audit identifies ${topCust.party_name} as the primary port client. Strategic relationship management is critical.`
         });
       }
 
@@ -306,11 +300,13 @@ const recommendationController = {
           recommendations.push({
             id: 'berth-performance-optimize',
             category: 'Berth Performance',
-            impact: 'Medium Impact',
-            title: 'Optimize berth revenue performance',
-            evidence: `Berth ${highestBerth.berth} contributes ${highestShare.toFixed(2)}% of total selected-scope revenue, whereas active Berth ${lowestBerth.berth} contributes only ${lowestShare.toFixed(2)}%.`,
-            action: `Review cargo allocation policies, optimize logistics flows, and identify dedicated customer opportunities for underperforming Berth ${lowestBerth.berth}.`,
-            benefit: 'Improves berth utilization balance and unlocks additional capacity across terminals.'
+            impact: 'MEDIUM IMPACT',
+            title: 'Review low-revenue berth contribution',
+            shortProblem: 'Significant revenue imbalance detected across terminal berths.',
+            evidence: `Top berth: ${highestBerth.berth} (${highestShare.toFixed(1)}%), low berth: ${lowestBerth.berth} (${lowestShare.toFixed(1)}%)`,
+            action: 'Compare low-revenue berths with high-revenue berths and review billing contribution.',
+            benefit: 'Improves berth-wise revenue visibility.',
+            explanation: `Berth utilization metrics indicate substantial differences in billing contribution. Benchmarking provides operational baseline.`
           });
         }
       }
