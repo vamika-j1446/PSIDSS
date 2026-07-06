@@ -211,34 +211,30 @@ const historicalController = {
 
       const query = `
         SELECT 
-          COALESCE(NULLIF(TRIM(commodity_group), ''), NULLIF(TRIM(commodity), ''), 'UNKNOWN') AS category, 
+          CASE
+            WHEN UPPER(TRIM(commodity_group)) IN ('OTHER CARGO') THEN 'OTHER CARGO'
+            WHEN UPPER(TRIM(commodity_group)) IN ('PETROLEUM') THEN 'PETROLEUM'
+            WHEN UPPER(TRIM(commodity_group)) IN ('GENERAL/OTHER', 'GENERAL / OTHER') THEN 'GENERAL/OTHER'
+            WHEN UPPER(TRIM(commodity_group)) IN (
+              'FERTILIZER RAW MATERIAL DRY',
+              'FERTILIZER RAWMATERIAL DRY'
+            ) THEN 'FERTILIZER RAW MATERIAL DRY'
+          END AS category,
           SUM(invoice_amount) AS revenue
         FROM PortRecords
         WHERE invoice_amount IS NOT NULL 
           AND invoice_amount > 0
-          AND COALESCE(NULLIF(TRIM(commodity_group), ''), NULLIF(TRIM(commodity), '')) IS NOT NULL
-          AND UPPER(COALESCE(commodity_group, commodity)) NOT IN (
-            'PILOTAGE',
-            'PORT DUES',
-            'BERTH HIRE',
-            'TOWAGE',
-            'ANCHORAGE',
-            'WHARFAGE',
-            'CARGO SPECIAL SERVICE',
-            'STORAGE',
-            'GROUND RENT',
-            'SHIFTING',
-            'FRESH WATER',
-            'CREW CHANGE',
-            'DEMURRAGE',
-            'HANDLING',
-            'SECURITY',
-            'WEIGHMENT'
+          AND UPPER(TRIM(commodity_group)) IN (
+            'OTHER CARGO',
+            'PETROLEUM',
+            'GENERAL/OTHER',
+            'GENERAL / OTHER',
+            'FERTILIZER RAW MATERIAL DRY',
+            'FERTILIZER RAWMATERIAL DRY'
           )
           ${f1.clause}
         GROUP BY category
         ORDER BY revenue DESC
-        LIMIT 10
       `;
 
       const commodityData = await sequelize.query(query, { type: QueryTypes.SELECT, replacements: f1.replacements });

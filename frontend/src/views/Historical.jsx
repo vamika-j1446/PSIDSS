@@ -349,7 +349,7 @@ export default function Historical({ token, selectedYear, activeTab }) {
 
         {/* Commodity Distribution Bar Chart */}
         <div class="p-6 rounded-2xl glass-panel space-y-4">
-          <h4 class="text-base font-bold text-white">Commodity Revenue distribution</h4>
+          <h4 class="text-base font-bold text-white">Commodity Group Revenue Distribution</h4>
           <div class="h-72 w-full text-xs">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart key={`${selectedYear}_${activeTab}`} data={commodities} layout="vertical" margin={{ left: 10, right: 10 }}>
