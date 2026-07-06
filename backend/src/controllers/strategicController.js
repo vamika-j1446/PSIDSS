@@ -54,38 +54,132 @@ const commodityNamesMap = {
   'YACHT-SAIL BOAT/ YACHT': 'Sail Boats & Yachts'
 };
 
-const serviceKeywords = [
-  'PILOTAGE',
-  'ANCHORAGE',
-  'TOWAGE',
-  'PORT DUES',
-  'FRESH WATER',
-  'CREW CHANGE',
-  'BERTH HIRE',
-  'MARINE SPECIAL SERVICE',
-  'CARGO SPECIAL SERVICE',
-  'CARGO SPECIAL SERVICES',
-  'COMPOSITE MARITIME',
-  'STORAGE',
-  'GROUND RENT',
-  'WHARFAGE',
-  'DEMURRAGE',
-  'INVOICE',
-  'CHARGE',
-  'CHARGES',
-  'HANDLING',
-  'SECURITY',
-  'VCN CANCELLATION',
-  'CANCELLATION',
-  'BUFFER YARD',
-  'RAMP EXAMINATION',
-  'WEIGHMENT',
-  'STUFF',
-  'DESTUFF',
-  'SHIFTING',
-  'COLD MOVEMENT',
-  'REEFER'
+const serviceKeywordsExclusions = [
+  'PILOTAGE', 'PORT DUES', 'TOWAGE', 'SHIFTING', 'BERTH HIRE', 'CREW CHANGE',
+  'ANCHORAGE', 'FRESH WATER', 'WEIGHMENT', 'VCN CANCELLATION', 'LIFT-ON',
+  'LIFT-OFF', 'WHARFAGE', 'STORAGE CHARGES', 'CARGO SPECIAL SERVICE',
+  'CONTAINER STUFF DESTUFF', 'CFS CONTAINER', 'PILOTAGE CANCELLATION',
+  'PILOTAGE DETENTION', 'COMPOSITE MARITIME CHARGES', 'SUNDRY VESSEL',
+  'SUNDRY CARGO', 'RAMP EXAMINATION', 'COLD MOVEMENT', 'HANDLING',
+  'SECURITY', 'GROUND RENT', 'DEMURRAGE', 'CFS STORAGE', 'COMPOSITE MARITIME',
+  'MARINE SPECIAL SERVICE', 'BUFFER YARD', 'REEFER', 'INVOICE', 'CHARGE', 'CHARGES'
 ];
+
+const parseSourceYear = (yearVal) => {
+  if (yearVal === null || yearVal === undefined) return null;
+  const str = String(yearVal).trim();
+  if (!str) return null;
+  const match = str.match(/\b\d{4}\b/);
+  if (match) {
+    return parseInt(match[0], 10);
+  }
+  const parsed = parseInt(str, 10);
+  return isNaN(parsed) ? null : parsed;
+};
+
+const normalizeCommodityName = (commodity) => {
+  if (!commodity) return 'UNKNOWN';
+  const c = String(commodity).toUpperCase().trim();
+
+  // A. Crude Oil
+  if (c.includes('CRUDE') || c.includes('SPMCRM') || c.includes('SPMCRO') || c.includes('SPMCRA') || c.includes('CROTH')) {
+    return 'CRUDE OIL';
+  }
+  // B. Diesel / HSD
+  if (c.includes('HSD') || c.includes('DIESEL HIGH SPEED') || c.includes('STS HIGH SPPED DIESEL')) {
+    return 'HSD / DIESEL';
+  }
+  // C. Motor Spirit
+  if (c.includes('MS-MOTOR SPIRIT') || c.includes('MOTOR SPIRIT')) {
+    return 'MOTOR SPIRIT';
+  }
+  // D. Fuel / Furnace Oil
+  if (c.includes('FO-OIL FURNACE OIL') || c.includes('FUO-FUEL OIL') || c.includes('FUEL OIL') || c.includes('FURNACE OIL') || c === 'FO') {
+    return 'FUEL / FURNACE OIL';
+  }
+  // E. Naphtha
+  if (c.includes('NAPHTHA') || c.includes('LAN-NAFTHA')) {
+    return 'NAPHTHA';
+  }
+  // F. Aviation Fuel
+  if (c.includes('ATF') || c.includes('AVIATION TURBO FUEL') || c.includes('JET PETROL') || c.includes('JP-JET PETROL')) {
+    return 'AVIATION FUEL';
+  }
+  // G. LPG
+  if (c.includes('LPG') || c.includes('BUTANE') || c.includes('PROPANE')) {
+    return 'LPG';
+  }
+  // H. Carbon Black Feed Stock
+  if (c.includes('CBFS') || c.includes('CARBON BLACK FEED STOCK')) {
+    return 'CARBON BLACK FEED STOCK';
+  }
+  // I. Fertilizer raw materials
+  if (c.includes('PHOSPHORIC')) {
+    return 'PHOSPHORIC ACID';
+  }
+  if (c.includes('SULPHURIC')) {
+    return 'SULPHURIC ACID';
+  }
+  if (c.includes('SULPHUR')) {
+    return 'SULPHUR';
+  }
+  if (c.includes('ROCK PHOSPHATE')) {
+    return 'ROCK PHOSPHATE';
+  }
+
+  // J. General cargo items & Clean fallback
+  if (c.includes('LIQUID AMMONIA') || c.includes('LA-LIQUID') || c.includes('LA-LIQUID AMMONIA')) {
+    return 'LIQUID AMMONIA';
+  }
+  if (c.includes('ETHYLINE DICHLORIDE') || c.includes('EDC-')) {
+    return 'ETHYLENE DICHLORIDE';
+  }
+  if (c.includes('ILMINITE SAND') || c.includes('ILMNT-')) {
+    return 'ILMENITE SAND';
+  }
+  if (c.includes('SUNFLOWER') || c.includes('SUNFWR-')) {
+    return 'SUNFLOWER OIL';
+  }
+  if (c.includes('SPICES') || c.includes('SPI-')) {
+    return 'SPICES';
+  }
+  if (c.includes('FOOD PRODUCTS') || c.includes('FDR-')) {
+    return 'FOOD PRODUCTS';
+  }
+  if (c.includes('TIMBER LOGS') || c.includes('LOGS-')) {
+    return 'TIMBER LOGS';
+  }
+  if (c.includes('ALUMINA') || c.includes('ALUMNA')) {
+    return 'ALUMINA';
+  }
+  if (c.includes('SALT')) {
+    return 'SALT';
+  }
+  if (c.includes('CLINKER') || c.includes('CLIN')) {
+    return 'CLINKER';
+  }
+  if (c.includes('CEMENT') || c.includes('CMG')) {
+    return 'CEMENT';
+  }
+  if (c.includes('METHANOL') || c.includes('MNOL')) {
+    return 'METHANOL';
+  }
+  if (c.includes('PROJECT CARGO') || c.includes('PROJCT')) {
+    return 'PROJECT CARGO';
+  }
+  if (c.includes('DEFENCE CARGO') || c.includes('DC-')) {
+    return 'DEFENCE CARGO';
+  }
+  if (c.includes('METALS') || c.includes('MMPS')) {
+    return 'METALS';
+  }
+
+  // Fallback: humanize the name
+  return commodity
+    .split(/[-_ ]+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
 
 const formatCurrency = (num) => {
   const absNum = Math.abs(num);
@@ -140,14 +234,27 @@ const strategicController = {
         if (idx < 5) top5CustomerShare += share;
       });
 
-      // 2. Commodity Growth Sectors (Calculated on resolved whitelist comparing FY24-25 vs FY16-17)
-      const latestYear = 2024;
-      const prevYear = 2016;
-      const prevYearExists = true;
+      // 2. Commodity Growth Sectors
+      let latestYear = 2024;
+      let prevYear = 2016;
+
+      if (year && year !== 'All' && year !== 'All Fiscal Years' && year !== 'all') {
+        if (year === 'Recent4') {
+          latestYear = 2024;
+          prevYear = 2021;
+        } else {
+          const numYear = parseInt(year, 10);
+          if (!isNaN(numYear)) {
+            latestYear = numYear;
+            prevYear = numYear - 1;
+            if (prevYear < 2016) prevYear = 2016;
+          }
+        }
+      }
 
       const commodityGrowth = [];
       let scopeClause = '';
-      const replacements = { latestYear, prevYear };
+      const replacements = {};
       if (req.user) {
         if (req.user.role === 'Party' && req.user.party_name) {
           scopeClause = ' AND party_name = :userPartyName';
@@ -165,20 +272,31 @@ const strategicController = {
           source_year,
           SUM(invoice_amount) as revenue
         FROM PortRecords
-        WHERE source_year IN (:latestYear, :prevYear) 
-          AND commodity IS NOT NULL 
+        WHERE commodity IS NOT NULL 
           AND commodity != ""${scopeClause}
         GROUP BY commodity_group, commodity, source_year
       `, { type: QueryTypes.SELECT, replacements });
 
-      // Pivot and Map display names using whitelist
       const pivot = {};
       const groupPivot = {};
 
       commodityRevenues.forEach(row => {
         const rawCommodity = row.commodity;
         const rawGroup = row.commodity_group;
-        
+        const rowYear = parseSourceYear(row.source_year);
+
+        // Exclude null years and years outside comparison bounds
+        if (rowYear === null || (rowYear !== latestYear && rowYear !== prevYear)) {
+          return;
+        }
+
+        // Exclude service keywords/charges
+        const upperComm = String(rawCommodity).toUpperCase().trim();
+        if (serviceKeywordsExclusions.some(keyword => upperComm.includes(keyword))) {
+          return;
+        }
+
+        // Determine groupName
         let groupName = 'Other Cargo';
         if (rawGroup) {
           const rgUpper = rawGroup.toUpperCase().trim();
@@ -191,38 +309,26 @@ const strategicController = {
           }
         }
 
-        const upperComm = rawCommodity.toUpperCase();
-        if (!serviceKeywords.some(keyword => upperComm.includes(keyword))) {
-          if (!groupPivot[groupName]) {
-            groupPivot[groupName] = { latest: 0, prev: 0 };
-          }
-          if (row.source_year === latestYear) {
-            groupPivot[groupName].latest += parseFloat(row.revenue) || 0;
-          } else if (row.source_year === prevYear) {
-            groupPivot[groupName].prev += parseFloat(row.revenue) || 0;
-          }
+        // Normalize commodity name
+        const name = normalizeCommodityName(rawCommodity);
+
+        // Group level pivot
+        if (!groupPivot[groupName]) {
+          groupPivot[groupName] = { latest: 0, prev: 0 };
+        }
+        if (rowYear === latestYear) {
+          groupPivot[groupName].latest += parseFloat(row.revenue) || 0;
+        } else if (rowYear === prevYear) {
+          groupPivot[groupName].prev += parseFloat(row.revenue) || 0;
         }
 
-        let name = commodityNamesMap[rawCommodity];
-        if (!name) {
-          if (serviceKeywords.some(keyword => upperComm.includes(keyword))) {
-            return;
-          }
-          // Humanize raw commodity code
-          name = rawCommodity
-            .toLowerCase()
-            .split(/[-_ ]+/)
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
-        }
-
+        // Granular level pivot
         if (!pivot[name]) {
           pivot[name] = { latest: 0, prev: 0, group: groupName };
         }
-
-        if (row.source_year === latestYear) {
+        if (rowYear === latestYear) {
           pivot[name].latest += parseFloat(row.revenue) || 0;
-        } else if (row.source_year === prevYear) {
+        } else if (rowYear === prevYear) {
           pivot[name].prev += parseFloat(row.revenue) || 0;
         }
       });
@@ -232,24 +338,27 @@ const strategicController = {
         const prevRev = pivot[name].prev;
         const group = pivot[name].group;
 
-        // Apply threshold: first_year_revenue >= 1,000,000 AND total_revenue_across_all_years >= 5,000,000
-        const totalAcross = latestRev + prevRev;
-        if (prevRev < 1000000 || totalAcross < 5000000) {
+        // Apply threshold: startRevenue >= 1,000,000 OR endRevenue >= 1,000,000
+        if (prevRev < 1000000 && latestRev < 1000000) {
           return;
         }
 
         let growth = 0;
+        let isNew = false;
         if (prevRev > 0) {
           growth = ((latestRev - prevRev) / prevRev) * 100;
         } else if (latestRev > 0) {
+          isNew = true;
           growth = 100.0;
         }
+
         commodityGrowth.push({
           name: name,
           group: group,
           latestRevenue: latestRev,
           previousRevenue: prevRev,
-          growthRate: parseFloat(growth.toFixed(2))
+          growthRate: parseFloat(growth.toFixed(2)),
+          isNew: isNew
         });
       });
 

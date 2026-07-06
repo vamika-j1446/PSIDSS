@@ -229,8 +229,13 @@ export default function Strategic({ token, selectedYear, activeTab }) {
           <div class="p-6 rounded-2xl glass-panel space-y-4 glow-emerald">
             <h4 class="text-base font-bold text-white flex items-center gap-2">
               <TrendingUp class="h-5 w-5 text-emerald-400" /> 
-              Expanding {viewMode === 'granular' ? 'Commodity' : 'Group'}
+              Expanding {viewMode === 'granular' ? 'Granular Commodities' : 'Group'}
             </h4>
+            {viewMode === 'granular' && (
+              <p class="text-[10px] text-slate-500 italic">
+                Service charges are excluded. Similar commodity labels are grouped for accurate growth calculation.
+              </p>
+            )}
             <div class="h-80 text-xs flex items-center justify-center">
               {expData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -280,8 +285,13 @@ export default function Strategic({ token, selectedYear, activeTab }) {
           <div class="p-6 rounded-2xl glass-panel space-y-4 glow-rose">
             <h4 class="text-base font-bold text-white flex items-center gap-2">
               <TrendingDown class="h-5 w-5 text-rose-500" /> 
-              Contracting {viewMode === 'granular' ? 'Commodity' : 'Group'}
+              Contracting {viewMode === 'granular' ? 'Granular Commodities' : 'Group'}
             </h4>
+            {viewMode === 'granular' && (
+              <p class="text-[10px] text-slate-500 italic">
+                Service charges are excluded. Similar commodity labels are grouped for accurate growth calculation.
+              </p>
+            )}
             <div class="h-80 text-xs flex items-center justify-center">
               {decData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
