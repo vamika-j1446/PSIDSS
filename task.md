@@ -1,0 +1,13 @@
+- [x] Create Sequelize model for ChatSession
+- [x] Create Sequelize model for ChatMessage
+- [x] Establish associations (ChatSession hasMany ChatMessages, ChatMessage belongsTo ChatSession)
+- [x] Implement GET /api/chatbot/sessions route
+- [x] Implement POST /api/chatbot/sessions route
+- [x] Implement GET /api/chatbot/sessions/:id/messages route
+- [x] Implement DELETE /api/chatbot/sessions/:id route
+- [x] Implement DELETE /api/chatbot/sessions route
+- [x] Upgrade POST /api/chatbot/ask route to support sessionId and user-specific message/response database logging
+- [x] Implement auto-title generation from first user message
+- [x] Process clear chat commands (clear chat, delete all above chats, etc.) to clear DB and return correct type/action payload
+- [x] Update Chatbot.jsx React component to include history panel (collapsible drawer), CRUD session actions, message loading, and clear triggers
+- [x] Verify chatbot session CRUD operations via http / node tests

@@ -1,0 +1,39 @@
+# Node modules & dependencies
+node_modules/
+node/
+nodejs/
+
+# SQLite database
+database.sqlite
+*.sqlite
+*.sqlite3
+
+# Local logs & configurations
+.env
+*.log
+.agents/
+.gemini/
+
+# Build outputs
+dist/
+build/
+out/
+
+# IDE / Editor configurations
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Temp directories
+tmp/
+temp/
+brain/
+scratch/
