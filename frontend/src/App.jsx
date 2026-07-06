@@ -15,7 +15,7 @@ import Gantt from './views/Gantt';
 import Recommendations from './views/Recommendations';
 import Admin from './views/Admin';
 import Chatbot from './views/Chatbot';
-axios.defaults.baseURL = 'http://localhost:5000';
+axios.defaults.baseURL = import.meta.env.VITE_API_BASE_URL || window.location.origin;
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('psidss_token'));
