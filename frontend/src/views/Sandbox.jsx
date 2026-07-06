@@ -261,7 +261,8 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
                 <div class="flex justify-between">
                   <span>Selected scope:</span>
                   <span class="text-slate-200">{simulationData?.yearScope || selectedYear}</span>
-                               <div class="flex justify-between">
+                </div>
+                <div class="flex justify-between">
                   <span>Total historical revenue:</span>
                   <span class="text-slate-200">{formatCurrency(totalBase)}</span>
                 </div>
