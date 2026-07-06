@@ -133,7 +133,27 @@ export default function Gantt({ token }) {
   const timelineStart = hasValidRange ? parseLocalDate(startDateStr) : null;
   const timelineEnd = hasValidRange ? parseLocalDate(endDateStr) : null;
 
+  // Calculate active vessels in current time window
+  const activeVesselsInWindow = vessels.filter((v) => {
+    if (!timelineStart || !timelineEnd) return false;
+    const vStart = parseVesselDate(v.ata);
+    const vEnd = parseVesselDate(v.departure);
+    if (!vStart || !vEnd) return false;
+    const tStart = timelineStart.getTime();
+    const tEnd = timelineEnd.getTime();
+    return vEnd.getTime() >= tStart && vStart.getTime() <= tEnd;
+  });
 
+  // Calculate column markers for Gantt header
+  const columnsCount = 6;
+  const colMarkers = [];
+  if (timelineStart && timelineEnd) {
+    const diff = timelineEnd.getTime() - timelineStart.getTime();
+    for (let i = 0; i < columnsCount; i++) {
+      const ms = timelineStart.getTime() + (diff * i) / (columnsCount - 1);
+      colMarkers.push(new Date(ms));
+    }
+  }
   // Get distinct berths to create swimlanes
   const berths = [...new Set(vessels.map(v => v.berth))].sort();
 

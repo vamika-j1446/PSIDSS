@@ -133,11 +133,11 @@ export default function Dashboard({ token, selectedYear, user }) {
               <span class="inline-block w-32 h-8 bg-slate-900/85 animate-pulse rounded-md"></span>
             ) : isSingleYear ? (
               <div>
-                <h3 class="text-lg font-bold text-slate-400 tracking-tight">
-                  N/A
+                <h3 class={`text-2xl font-black font-display tracking-tight ${kpis?.growthPercentage !== undefined ? (kpis.growthPercentage >= 0 ? 'text-emerald-400' : 'text-rose-400') : 'text-slate-400'}`}>
+                  YoY Growth: {kpis?.growthPercentage !== undefined ? `${kpis.growthPercentage >= 0 ? '+' : ''}${kpis.growthPercentage}%` : 'N/A'}
                 </h3>
                 <span class="text-[10px] text-slate-500 font-medium block mt-1.5 leading-normal">
-                  N/A — needs at least two fiscal years
+                  CAGR: N/A — needs at least two fiscal years
                 </span>
               </div>
             ) : (

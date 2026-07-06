@@ -22,8 +22,32 @@ const historicalController = {
       const timerLabel = `historical-trends-${year}-${Date.now()}`;
       console.time(timerLabel);
 
-      const f1_yearly = getYearFilter(req, true, '', false);
+      let f1_yearly = getYearFilter(req, true, '', false);
       const f1_monthly = getYearFilter(req, true, '', false);
+
+      const numericYear = parseInt(year, 10);
+      if (!isNaN(numericYear) && year !== 'All' && year !== 'Recent4') {
+        const prevYearVal = numericYear - 1;
+        const conditions = [];
+        const replacements = {};
+        conditions.push('source_year IN (:prevYearVal, :selectedYearVal)');
+        replacements.prevYearVal = prevYearVal;
+        replacements.selectedYearVal = numericYear;
+
+        if (req.user) {
+          if (req.user.role === 'Party' && req.user.party_name) {
+            conditions.push('party_name = :userPartyName');
+            replacements.userPartyName = req.user.party_name;
+          } else if (req.user.role === 'VCN' && req.user.vcn) {
+            conditions.push('vcn = :userVcn');
+            replacements.userVcn = req.user.vcn;
+          }
+        }
+        f1_yearly = {
+          clause: ` AND ${conditions.join(' AND ')}`,
+          replacements
+        };
+      }
 
       let sqlYearly, sqlMonthly;
       if (DB_TYPE === 'mysql') {

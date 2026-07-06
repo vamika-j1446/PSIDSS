@@ -245,6 +245,19 @@ const dashboardController = {
       let overallGrowth = 0;
       let growthPercentage = 0;
 
+      let prevYearRevenue = 0;
+      if (year !== 'All' && year !== 'All Fiscal Years' && year !== 'Recent4') {
+        const numericYear = parseInt(year, 10);
+        if (!isNaN(numericYear)) {
+          const prevYearVal = numericYear - 1;
+          const prevRes = await sequelize.query(
+            `SELECT COALESCE(SUM(invoice_amount), 0) AS revenue FROM PortRecords WHERE source_year = :prevYearVal`,
+            { type: QueryTypes.SELECT, replacements: { prevYearVal } }
+          );
+          prevYearRevenue = parseFloat(prevRes[0]?.revenue) || 0;
+        }
+      }
+
       if (scopeYearlyRevenues.length >= 2) {
         const firstRow = scopeYearlyRevenues[0];
         const lastRow = scopeYearlyRevenues[scopeYearlyRevenues.length - 1];
@@ -262,6 +275,11 @@ const dashboardController = {
             growthPercentage = overallGrowth;
           }
         }
+      } else if (scopeYearlyRevenues.length === 1 && prevYearRevenue > 0) {
+        const currentRev = parseFloat(scopeYearlyRevenues[0].revenue) || 0;
+        overallGrowth = ((currentRev - prevYearRevenue) / prevYearRevenue) * 100;
+        growthPercentage = overallGrowth;
+        cagr = 0;
       }
 
       let highestRevenueYear = 'N/A';
