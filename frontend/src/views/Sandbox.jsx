@@ -9,7 +9,7 @@ import {
 
 export default function Sandbox({ token, selectedYear, activeTab }) {
   // Tariff percentage value: default +10%
-  const [tariffPct, setTariffPct] = useState(10);
+  const [tariffPercent, setTariffPercent] = useState(10);
   
   const [simulationData, setSimulationData] = useState(null);
   const [historicalSeries, setHistoricalSeries] = useState([]);
@@ -20,7 +20,7 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
   const [localBerth, setLocalBerth] = useState('All Berths');
   const [berthList, setBerthList] = useState(['All Berths']);
 
-  // Run simulation only when berth, year or token changes (not on tariffPct changes)
+  // Run simulation only when berth, year or token changes (not on tariffPercent changes)
   useEffect(() => {
     const runSimulation = async () => {
       setLoading(true);
@@ -59,7 +59,7 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
   }, [simulationData]);
 
   const resetSliders = () => {
-    setTariffPct(10);
+    setTariffPercent(10);
     setLocalBerth('All Berths');
   };
 
@@ -70,31 +70,34 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
     return `₹${num.toLocaleString('en-IN')}`;
   };
 
-  // Calculate overall metrics locally based on tariffPct
+  // Calculate overall metrics locally based on tariffPercent
   const totalBase = simulationData?.baseRevenue ?? 0;
-  const totalSim = totalBase * (1 + tariffPct / 100);
+  const totalSim = totalBase * (1 + tariffPercent / 100);
   const revDiff = totalSim - totalBase;
-  const pctChange = tariffPct;
+  const pctChange = tariffPercent;
 
-  // Recalculate projectionData dynamically when tariffPct changes
-  const multiplier = 1 + tariffPct / 100;
-  const chartData = historicalSeries.map(row => {
-    const hist = Number(row.historicalRevenue || row.revenue || 0);
-    return {
-      ...row,
-      historicalRevenue: hist,
-      simulatedRevenue: hist * multiplier,
-      revenueDelta: hist * (tariffPct / 100)
-    };
-  });
+  // Recalculate projectionData dynamically using useMemo when tariffPercent changes
+  const projectionData = React.useMemo(() => {
+    const multiplier = 1 + Number(tariffPercent || 0) / 100;
+    return historicalSeries.map((row) => {
+      const base = Number(row.historicalRevenue ?? row.baseRevenue ?? row.revenue ?? 0);
+      return {
+        ...row,
+        period: row.period || row.year || row.month,
+        historicalRevenue: base,
+        simulatedRevenue: base * multiplier,
+        revenueDelta: base * (Number(tariffPercent || 0) / 100),
+      };
+    });
+  }, [historicalSeries, tariffPercent]);
 
   const getDiagnosticMessage = () => {
-    const sign = tariffPct >= 0 ? '+' : '';
+    const sign = tariffPercent >= 0 ? '+' : '';
     const share = simulationData?.diagnostics?.revenueShare ?? 0;
     if (localBerth === 'All' || localBerth === 'All Berths') {
-      return `A ${sign}${tariffPct}% tariff adjustment increases estimated revenue from ${formatCurrency(totalBase)} to ${formatCurrency(totalSim)}, creating ${formatCurrency(revDiff)} additional revenue. This is based on all selected historical billing records.`;
+      return `A ${sign}${tariffPercent}% tariff adjustment increases estimated revenue from ${formatCurrency(totalBase)} to ${formatCurrency(totalSim)}, creating ${formatCurrency(revDiff)} additional revenue. This is based on all selected historical billing records.`;
     }
-    return `This berth contributes ${share}% of selected-scope revenue. A ${sign}${tariffPct}% tariff adjustment creates ${formatCurrency(revDiff)} additional estimated revenue.`;
+    return `This berth contributes ${share}% of selected-scope revenue. A ${sign}${tariffPercent}% tariff adjustment creates ${formatCurrency(revDiff)} additional estimated revenue.`;
   };
 
   return (
@@ -156,7 +159,7 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
             <div class="space-y-3">
               <div class="flex justify-between text-xs font-semibold uppercase tracking-wider text-slate-400">
                 <span>Tariff Adjustment</span>
-                <span class="text-blue-400 font-bold font-mono">{tariffPct >= 0 ? '+' : ''}{tariffPct}%</span>
+                <span class="text-blue-400 font-bold font-mono">{tariffPercent >= 0 ? '+' : ''}{tariffPercent}%</span>
               </div>
               
               <input 
@@ -164,8 +167,8 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
                 min="-20" 
                 max="50" 
                 step="1"
-                value={tariffPct} 
-                onChange={(e) => setTariffPct(parseInt(e.target.value, 10))}
+                value={tariffPercent} 
+                onChange={(e) => setTariffPercent(parseInt(e.target.value, 10))}
                 class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
               />
 
@@ -174,9 +177,9 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
                 {[3, 5, 10, 15, 20].map((pct) => (
                   <button
                     key={pct}
-                    onClick={() => setTariffPct(pct)}
+                    onClick={() => setTariffPercent(pct)}
                     class={`flex-1 py-1.5 px-2 rounded text-[10px] font-bold border transition-all ${
-                      tariffPct === pct
+                      tariffPercent === pct
                         ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/10'
                         : 'bg-slate-900/50 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-900'
                     }`}
@@ -348,18 +351,22 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
             </div>
 
             <div class="h-80 w-full text-xs">
-              {(!simulationData || !simulationData.projection || simulationData.projection.length === 0) ? (
+              {(!simulationData || !projectionData || projectionData.length === 0) ? (
                 <p class="text-slate-400 text-center py-20 border border-slate-900 rounded-xl">
                   No simulation data available for selected filter scope.
                 </p>
               ) : (() => {
+                // Temporary debug logs as requested
+                console.log("Tariff:", tariffPercent);
+                console.log("Projection Data:", projectionData.slice(0, 3));
+
                 const maxChartVal = Math.max(
-                  ...chartData.map(p => Math.max(p.historicalRevenue, p.simulatedRevenue))
+                  ...projectionData.map(p => Math.max(p.historicalRevenue, p.simulatedRevenue))
                 );
 
                 return (
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart key={`${selectedYear}_${activeTab}`} data={chartData} margin={{ top: 10, right: 10, left: -15, bottom: 5 }}>
+                    <LineChart key={`${selectedYear}_${activeTab}_${tariffPercent}`} data={projectionData} margin={{ top: 10, right: 10, left: -15, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                       <XAxis dataKey="year" stroke="#64748b" />
                       <YAxis 
@@ -381,7 +388,7 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
                                   <span class="font-bold text-slate-400">{formatCurrency(hist)}</span>
                                 </p>
                                 <p class="flex justify-between gap-6">
-                                  <span>Simulated Revenue:</span>
+                                  <span>Simulation Revenue:</span>
                                   <span class="font-bold text-blue-400">{formatCurrency(sim)}</span>
                                 </p>
                                 <p class="flex justify-between gap-6 border-t border-slate-900 pt-1.5 mt-1.5 font-bold">
@@ -404,9 +411,8 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
                         dataKey="historicalRevenue" 
                         name="Historical Baseline" 
                         stroke="#475569" 
-                        strokeWidth={2}
                         dot={false}
-                        strokeDasharray="4 4"
+                        strokeDasharray="5 5"
                         isAnimationActive={true}
                         animationDuration={1000}
                         animationEasing="ease-in-out"
@@ -416,9 +422,9 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
                       <Line 
                         type="monotone" 
                         dataKey="simulatedRevenue" 
-                        name="Simulated Revenue" 
+                        name="Simulation Revenue" 
                         stroke="#3b82f6" 
-                        strokeWidth={2.5}
+                        strokeWidth={3}
                         dot={false}
                         activeDot={{ r: 6 }}
                         isAnimationActive={true}
