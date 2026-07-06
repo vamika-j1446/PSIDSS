@@ -180,7 +180,7 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
         <div class="lg:col-span-2 space-y-6">
           
           {/* Calculations Summary Card Grid */}
-          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             
             {/* Base Revenue */}
             <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex flex-col justify-between shadow-sm">
@@ -214,14 +214,6 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
               <h5 class={`text-sm font-bold mt-2 truncate ${revDiff >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {revDiff >= 0 ? '+' : ''}{formatCurrency(revDiff)}
               </h5>
-            </div>
-
-            {/* Additional Revenue */}
-            <div class="p-4 rounded-xl bg-blue-950/20 border border-blue-900/30 flex flex-col justify-between shadow-sm">
-              <span class="text-[9px] font-bold uppercase tracking-wider text-blue-400 flex items-center gap-1">
-                <TrendingUp class="h-3 w-3" /> Additional Net
-              </span>
-              <h5 class="text-sm font-bold text-blue-300 mt-2 truncate">{formatCurrency(additionalRev)}</h5>
             </div>
 
           </div>
@@ -337,50 +329,83 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
                 <p class="text-slate-400 text-center py-20 border border-slate-900 rounded-xl">
                   No simulation data available for selected filter scope.
                 </p>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart key={`${selectedYear}_${activeTab}`} data={simulationData.projection} margin={{ top: 10, right: 10, left: -15, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                    <XAxis dataKey="year" stroke="#64748b" />
-                    <YAxis stroke="#64748b" tickFormatter={(v) => `₹${(v / 1.0e7).toFixed(1)} Cr`} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
-                      itemStyle={{ color: '#fff' }}
-                      formatter={(value) => [formatCurrency(value)]}
-                      labelStyle={{ color: '#fff', fontWeight: 'bold' }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                    
-                    {/* Baseline Line */}
-                    <Line 
-                      type="monotone" 
-                      dataKey="historicalRevenue" 
-                      name="Historical Baseline" 
-                      stroke="#475569" 
-                      strokeWidth={2}
-                      dot={false}
-                      strokeDasharray="4 4"
-                      isAnimationActive={true}
-                      animationDuration={1000}
-                      animationEasing="ease-in-out"
-                    />
+              ) : (() => {
+                const maxChartVal = Math.max(
+                  ...simulationData.projection.map(p => Math.max(p.historicalRevenue, p.simulatedRevenue))
+                );
 
-                    {/* Simulated Line */}
-                    <Line 
-                      type="monotone" 
-                      dataKey="simulatedRevenue" 
-                      name="Simulated Revenue" 
-                      stroke="#3b82f6" 
-                      strokeWidth={2.5}
-                      dot={false}
-                      activeDot={{ r: 6 }}
-                      isAnimationActive={true}
-                      animationDuration={1000}
-                      animationEasing="ease-in-out"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
+                return (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart key={`${selectedYear}_${activeTab}`} data={simulationData.projection} margin={{ top: 10, right: 10, left: -15, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                      <XAxis dataKey="year" stroke="#64748b" />
+                      <YAxis 
+                        stroke="#64748b" 
+                        tickFormatter={(v) => `₹${(v / 1.0e7).toFixed(1)} Cr`} 
+                        domain={[0, maxChartVal ? Math.ceil(maxChartVal * 1.1) : 'auto']}
+                      />
+                      <Tooltip 
+                        content={({ active, payload, label }) => {
+                          if (active && payload && payload.length) {
+                            const hist = payload.find(p => p.dataKey === 'historicalRevenue')?.value || 0;
+                            const sim = payload.find(p => p.dataKey === 'simulatedRevenue')?.value || 0;
+                            const diff = sim - hist;
+                            return (
+                              <div class="p-4 bg-slate-950/95 border border-slate-800 rounded-xl space-y-1.5 text-xs text-slate-300 leading-normal shadow-xl">
+                                <p class="font-bold text-white mb-1">Fiscal Year {label}</p>
+                                <p class="flex justify-between gap-6">
+                                  <span>Historical Baseline:</span>
+                                  <span class="font-bold text-slate-400">{formatCurrency(hist)}</span>
+                                </p>
+                                <p class="flex justify-between gap-6">
+                                  <span>Simulated Revenue:</span>
+                                  <span class="font-bold text-blue-400">{formatCurrency(sim)}</span>
+                                </p>
+                                <p class="flex justify-between gap-6 border-t border-slate-900 pt-1.5 mt-1.5 font-bold">
+                                  <span>Difference:</span>
+                                  <span class={diff >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                                    {diff >= 0 ? '+' : ''}{formatCurrency(diff)}
+                                  </span>
+                                </p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                      
+                      {/* Baseline Line */}
+                      <Line 
+                        type="monotone" 
+                        dataKey="historicalRevenue" 
+                        name="Historical Baseline" 
+                        stroke="#475569" 
+                        strokeWidth={2}
+                        dot={false}
+                        strokeDasharray="4 4"
+                        isAnimationActive={true}
+                        animationDuration={1000}
+                        animationEasing="ease-in-out"
+                      />
+
+                      {/* Simulated Line */}
+                      <Line 
+                        type="monotone" 
+                        dataKey="simulatedRevenue" 
+                        name="Simulated Revenue" 
+                        stroke="#3b82f6" 
+                        strokeWidth={2.5}
+                        dot={false}
+                        activeDot={{ r: 6 }}
+                        isAnimationActive={true}
+                        animationDuration={1000}
+                        animationEasing="ease-in-out"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                );
+              })()}
             </div>
           </div>
 
