@@ -5,6 +5,26 @@ import {
   Plus, History, Trash2, Calendar 
 } from 'lucide-react';
 
+const frontendDictionary = {
+  cagr: "CAGR means Compound Annual Growth Rate. It shows the average yearly growth rate over a period. In PSIDSS, it helps understand how port revenue has grown across financial years after smoothing year-to-year fluctuations.",
+  hhi: "HHI measures concentration. In this project, it can show whether revenue depends too much on a few customers, berths, or commodity groups. Higher HHI means higher dependency risk.",
+  'tariff simulation': "Tariff Simulation is a what-if calculation. It estimates how revenue may change if tariffs increase or decrease. In this project, it applies the selected percentage change to historical billing revenue.",
+  yoy: "YoY stands for Year-over-Year growth. It compares the revenue of one financial year directly with the previous financial year to show short-term growth dynamics.",
+  revenue: "Revenue represents the total billing amount generated from port services and cargo-related activities. It indicates the gross financial intake before subtracting operational costs.",
+  'invoice amount': "Invoice Amount is the specific billing value recorded for an individual port transaction, serving as the base data for all revenue aggregations.",
+  vcn: "VCN stands for Vessel Call Number. It is a unique identifier assigned to each vessel visit or call at the port, allowing precise tracking of ship operations and billing.",
+  grt: "GRT stands for Gross Registered Tonnage. It measures a vessel's total internal volume, which is often used as the basis for calculating port dues and pilotage charges.",
+  berth: "A berth is a designated location in the port where vessels dock to load, unload, or receive services. Berth performance is key to terminal efficiency.",
+  commodity: "A commodity refers to the specific cargo type handled, such as cement, petroleum, or fertilizer raw materials. Tracking commodities helps optimize handling infrastructure.",
+  'commodity group': "A commodity group is a broader category of related cargo types (e.g., Petroleum, Containers, or Dry Bulk), simplifying high-level trade analysis.",
+  'charge name': "Charge Name refers to the specific billing head or service type invoiced, such as Pilotage, Port Dues, Berth Hire, or Wharfage.",
+  'party name': "Party Name represents the customer, shipping agent, or billing partner responsible for the port transactions, used to analyze client revenue concentration.",
+  'port dues': "Port Dues are fees charged on incoming vessels for entering port limits and utilizing basic port navigation and security infrastructure.",
+  pilotage: "Pilotage charges cover services where a licensed port pilot guides a vessel safely through the harbor channel to and from the berths.",
+  wharfage: "Wharfage is the fee charged for cargo passing over the port's wharves or docks, calculated based on weight, volume, or package type.",
+  anchorage: "Anchorage fees are charged to vessels anchored in designated harbor waters outside active berths while waiting for clearance or cargo availability."
+};
+
 export default function Chatbot({ token, selectedYear, pageContext }) {
   const [isOpen, setIsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(true);
@@ -13,6 +33,7 @@ export default function Chatbot({ token, selectedYear, pageContext }) {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [thinkingText, setThinkingText] = useState('Thinking...');
   const [error, setError] = useState('');
   const messagesEndRef = useRef(null);
 
@@ -50,7 +71,7 @@ export default function Chatbot({ token, selectedYear, pageContext }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Fetch all sessions
+  // Fetch all sessions in the background
   const fetchSessions = async () => {
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } };
@@ -63,33 +84,31 @@ export default function Chatbot({ token, selectedYear, pageContext }) {
 
   // Create/Start a brand new chat
   const createNewChat = async () => {
-    setLoading(true);
     setError('');
+    const newGreeting = {
+      role: 'assistant',
+      message: 'Hello! I am your Port DSS Assistant. Ask me about revenue, berths, customers, commodities, tariff simulation, or port terms.',
+      source: 'system',
+      type: 'explanation'
+    };
+    // Update local messages instantly
+    setMessages([newGreeting]);
+    setActiveSessionId(null);
+
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } };
       const response = await axios.post('/api/chatbot/sessions', { title: 'New Chat' }, config);
       const newSessionId = response.data.id;
       setActiveSessionId(newSessionId);
-      setMessages([
-        {
-          role: 'assistant',
-          message: 'Hello! I am your Port DSS Assistant. Ask me about revenue, berths, customers, commodities, tariff simulation, or port terms.',
-          source: 'system',
-          type: 'explanation'
-        }
-      ]);
       await fetchSessions();
     } catch (err) {
       console.error(err);
-      setError('Failed to start a new chat.');
-    } finally {
-      setLoading(false);
+      setError('Failed to start a new chat session in the background.');
     }
   };
 
   // Load selected session messages
   const loadSession = async (sessionId) => {
-    setLoading(true);
     setError('');
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } };
@@ -111,8 +130,6 @@ export default function Chatbot({ token, selectedYear, pageContext }) {
     } catch (err) {
       console.error(err);
       setError('Failed to load chat history.');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -143,17 +160,86 @@ export default function Chatbot({ token, selectedYear, pageContext }) {
     }
   };
 
+  // Match local dictionary entries for instant responses
+  const getLocalDictionaryAnswer = (text) => {
+    const cleanMsg = text.toLowerCase().trim().replace(/[?.,\/#!$%\^&\*;:{}=\-_`~()]/g, "");
+    const prefixes = ['what is ', 'what does ', 'define ', 'explain ', 'meaning of ', 'what is a ', 'what is an '];
+    let term = cleanMsg;
+    for (const prefix of prefixes) {
+      if (cleanMsg.startsWith(prefix)) {
+        term = cleanMsg.substring(prefix.length).trim();
+        break;
+      }
+    }
+
+    if (term.endsWith(" mean")) {
+      term = term.substring(0, term.length - 5).trim();
+    }
+    if (term.endsWith(" stands for")) {
+      term = term.substring(0, term.length - 11).trim();
+    }
+
+    if (frontendDictionary[term]) {
+      return frontendDictionary[term];
+    }
+    return null;
+  };
+
   // Send message
   const handleSend = async (textToSend) => {
+    // 1. Prevent duplicate requests
+    if (loading) return;
+
     const text = textToSend || inputText;
     if (!text.trim()) return;
 
-    // Add user message locally
+    // Stage user message instantly
     const userMsg = { role: 'user', message: text };
     setMessages(prev => [...prev, userMsg]);
     setInputText('');
-    setLoading(true);
     setError('');
+
+    // 2. Client-Side instant dictionary matching
+    const localAnswer = getLocalDictionaryAnswer(text);
+    if (localAnswer) {
+      // Return instant local answer with NO thinking state shown
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        message: localAnswer,
+        source: 'dictionary',
+        type: 'dictionary'
+      }]);
+
+      // Log in database asynchronously in the background
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      axios.post('/api/chatbot/ask', {
+        message: text,
+        sessionId: activeSessionId,
+        year: selectedYear,
+        pageContext: pageContext
+      }, config).then(res => {
+        if (res.data.sessionId && res.data.sessionId !== activeSessionId) {
+          setActiveSessionId(res.data.sessionId);
+        }
+        fetchSessions();
+      }).catch(err => console.error("Async background save failed:", err));
+      
+      return;
+    }
+
+    // 3. Setup dynamic thinking status
+    const cleanMsg = text.toLowerCase().trim();
+    const isSqlKeyword = cleanMsg.includes('revenue') || cleanMsg.includes('trend') || 
+                         cleanMsg.includes('berth') || cleanMsg.includes('customer') || 
+                         cleanMsg.includes('party') || cleanMsg.includes('commodity') || 
+                         cleanMsg.includes('cargo') || cleanMsg.includes('increasing') || 
+                         cleanMsg.includes('growing') || cleanMsg.includes('decreasing') || 
+                         cleanMsg.includes('concentration') || cleanMsg.includes('dependent') ||
+                         cleanMsg.includes('how much') || cleanMsg.includes('highest') ||
+                         cleanMsg.includes('who is') || cleanMsg.includes('which');
+    
+    setThinkingText(isSqlKeyword ? "Checking records..." : "Thinking...");
+    setLoading(true);
 
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } };
@@ -200,11 +286,23 @@ export default function Chatbot({ token, selectedYear, pageContext }) {
     }
   };
 
-  // Load chat history & initialize on mount / toggle open
+  // Open chatbot panel instantly, showing greeting immediately, and loading history in background
   useEffect(() => {
     if (isOpen && token) {
+      // Set default initial greeting instantly
+      if (messages.length === 0) {
+        setMessages([
+          {
+            role: 'assistant',
+            message: 'Hello! I am your Port DSS Assistant. Ask me about revenue, berths, customers, commodities, tariff simulation, or port terms.',
+            source: 'system',
+            type: 'explanation'
+          }
+        ]);
+      }
+
+      // Load sessions and history asynchronously in background
       fetchSessions().then(() => {
-        // If there's no active session yet, check if there's a session we can load
         if (!activeSessionId) {
           axios.get('/api/chatbot/sessions', { headers: { Authorization: `Bearer ${token}` } })
             .then(res => {
@@ -392,7 +490,7 @@ export default function Chatbot({ token, selectedYear, pageContext }) {
                   </div>
                   <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-3 flex items-center gap-2">
                     <Loader2 class="h-4 w-4 text-blue-400 animate-spin" />
-                    <span class="text-slate-400 font-medium">Assistant is thinking...</span>
+                    <span class="text-slate-400 font-medium">{thinkingText}</span>
                   </div>
                 </div>
               )}
@@ -412,8 +510,9 @@ export default function Chatbot({ token, selectedYear, pageContext }) {
                 {suggestedQuestions.map((q) => (
                   <button
                     key={q}
+                    disabled={loading}
                     onClick={() => handleSend(q)}
-                    class="bg-slate-900 hover:bg-slate-800/80 border border-slate-800 text-[10px] font-semibold text-slate-300 hover:text-white px-2.5 py-1 rounded-lg transition-all shrink-0 whitespace-nowrap"
+                    class="bg-slate-900 hover:bg-slate-800/80 border border-slate-800 text-[10px] font-semibold text-slate-300 hover:text-white px-2.5 py-1 rounded-lg transition-all shrink-0 whitespace-nowrap disabled:opacity-50"
                   >
                     {q}
                   </button>
@@ -428,10 +527,11 @@ export default function Chatbot({ token, selectedYear, pageContext }) {
             >
               <input
                 type="text"
+                disabled={loading}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                placeholder="Ask a question..."
-                class="flex-1 bg-slate-950 border border-slate-800 focus:border-blue-500/50 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none transition-colors"
+                placeholder={loading ? "Waiting for response..." : "Ask a question..."}
+                class="flex-1 bg-slate-950 border border-slate-800 focus:border-blue-500/50 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none transition-colors disabled:opacity-50"
               />
               <button
                 type="submit"

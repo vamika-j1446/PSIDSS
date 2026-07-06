@@ -11,3 +11,11 @@
 - [x] Process clear chat commands (clear chat, delete all above chats, etc.) to clear DB and return correct type/action payload
 - [x] Update Chatbot.jsx React component to include history panel (collapsible drawer), CRUD session actions, message loading, and clear triggers
 - [x] Verify chatbot session CRUD operations via http / node tests
+- [x] Implement fast intent check order in chatbotController.js
+- [x] Add time-aware direct SQL query caching in chatbotController.js
+- [x] Execute chat history database writes asynchronously (setImmediate) in ask route
+- [x] Embed client-side dictionary matching inside Chatbot.jsx for instant dictionary answers
+- [x] Add dynamic thinking states ("Checking records...", "Thinking...") based on query intent
+- [x] Add backend timing console logs to identify bottlenecks
+- [x] Implement double-submit click guards and input disables to prevent duplicate chatbot calls
+- [x] Open chat panels instantly and warm up greetings immediately
