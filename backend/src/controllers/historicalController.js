@@ -255,10 +255,9 @@ const historicalController = {
   // 5. Berth Gantt Timeline data
   getGanttData: async (req, res) => {
     try {
-      const year = req.query.year || 'All';
       const { startDate, endDate } = req.query;
       
-      let cacheKey = `historical_gantt_${year}`;
+      let cacheKey = `historical_gantt_all`;
       if (startDate && endDate) {
         cacheKey += `_range_${startDate}_${endDate}`;
       }
@@ -274,7 +273,7 @@ const historicalController = {
         return res.json(cached);
       }
 
-      const f1 = getYearFilter(req, true); // hasWhereAlready = true
+      const f1 = getYearFilter(req, true, '', !!(startDate && endDate)); // ignoreYear = true if startDate and endDate are present
 
       let dateClause = '';
       const replacements = { ...f1.replacements };

@@ -2,14 +2,11 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Anchor, Calendar, Info, AlertCircle, HelpCircle } from 'lucide-react';
 
-export default function Gantt({ token, selectedYear }) {
+export default function Gantt({ token }) {
   const [vessels, setVessels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
-  // Local filter states
-  const [localYear, setLocalYear] = useState(selectedYear || 'All');
-  const [localMonth, setLocalMonth] = useState('All');
+  const [validationError, setValidationError] = useState('');
 
   // Input states for calendar selectors
   const [inputStartDate, setInputStartDate] = useState('');
@@ -47,35 +44,14 @@ export default function Gantt({ token, selectedYear }) {
     return !isNaN(d.getTime());
   };
 
-  const months = [
-    { value: 'All', label: 'All Months' },
-    { value: '1', label: 'January' },
-    { value: '2', label: 'February' },
-    { value: '3', label: 'March' },
-    { value: '4', label: 'April' },
-    { value: '5', label: 'May' },
-    { value: '6', label: 'June' },
-    { value: '7', label: 'July' },
-    { value: '8', label: 'August' },
-    { value: '9', label: 'September' },
-    { value: '10', label: 'October' },
-    { value: '11', label: 'November' },
-    { value: '12', label: 'December' }
-  ];
-
-  // Sync year state when global selectedYear changes
-  useEffect(() => {
-    setLocalYear(selectedYear);
-    setLocalMonth('All');
-  }, [selectedYear]);
-
   const fetchGanttData = async (start = '', end = '') => {
     setLoading(true);
+    setError('');
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } };
-      let url = `/api/historical/gantt?year=${localYear}`;
+      let url = `/api/historical/gantt`;
       if (start && end) {
-        url += `&startDate=${start}&endDate=${end}`;
+        url += `?startDate=${start}&endDate=${end}`;
       }
       const response = await axios.get(url, config);
       const data = response.data;
@@ -88,7 +64,7 @@ export default function Gantt({ token, selectedYear }) {
           const minDate = dates[0] || new Date();
           const maxDate = dates[dates.length - 1] || new Date();
           
-          // Default: show the first 30 days of data, or the full year range
+          // Default: show the first 30 days of data, or the full available range
           const defaultStart = minDate;
           const defaultEnd = new Date(minDate.getTime() + 30 * 24 * 60 * 60 * 1000) < maxDate 
             ? new Date(minDate.getTime() + 30 * 24 * 60 * 60 * 1000) 
@@ -117,11 +93,18 @@ export default function Gantt({ token, selectedYear }) {
 
   useEffect(() => {
     fetchGanttData();
-  }, [token, localYear]);
+  }, [token]);
 
   const handleApplyFilter = () => {
+    setValidationError('');
     if (!isValidDate(inputStartDate) || !isValidDate(inputEndDate)) {
-      alert("Please select valid dates");
+      setValidationError("Please select valid start and end dates.");
+      return;
+    }
+    const start = new Date(inputStartDate);
+    const end = new Date(inputEndDate);
+    if (end < start) {
+      setValidationError("End Date cannot be earlier than Start Date.");
       return;
     }
     setStartDateStr(inputStartDate);
@@ -129,37 +112,18 @@ export default function Gantt({ token, selectedYear }) {
     fetchGanttData(inputStartDate, inputEndDate);
   };
 
-  const handleMonthChange = (mVal) => {
-    setLocalMonth(mVal);
-    if (mVal === 'All') {
-      resetFilters();
-      return;
-    }
-    const monthNum = parseInt(mVal);
-    const yr = localYear === 'All' ? '2024' : localYear; // fallback to 2024 if All
-    const firstDay = `${yr}-${String(monthNum).padStart(2, '0')}-01`;
-    const lastDayNum = new Date(parseInt(yr), monthNum, 0).getDate();
-    const lastDay = `${yr}-${String(monthNum).padStart(2, '0')}-${String(lastDayNum).padStart(2, '0')}`;
-    
-    setInputStartDate(firstDay);
-    setInputEndDate(lastDay);
-    setStartDateStr(firstDay);
-    setEndDateStr(lastDay);
-    fetchGanttData(firstDay, lastDay);
-  };
-
   const resetFilters = () => {
-    setLocalYear(selectedYear || 'All');
-    setLocalMonth('All');
+    setInputStartDate('');
+    setInputEndDate('');
+    setStartDateStr('');
+    setEndDateStr('');
+    setValidationError('');
     fetchGanttData();
   };
 
   const hasValidRange = isValidDate(startDateStr) && isValidDate(endDateStr);
   const timelineStart = hasValidRange ? parseLocalDate(startDateStr) : null;
   const timelineEnd = hasValidRange ? parseLocalDate(endDateStr) : null;
-
-  const yearMin = localYear !== 'All' ? `${localYear}-01-01` : '2016-01-01';
-  const yearMax = localYear !== 'All' ? `${localYear}-12-31` : '2025-12-31';
 
   if (loading) {
     return (
@@ -273,89 +237,54 @@ export default function Gantt({ token, selectedYear }) {
           <p class="text-slate-400 text-sm mt-1">Real-time terminal lane occupancy tracking, overlaps, and turnaround audits.</p>
         </div>
 
-        <div class="flex flex-wrap items-center gap-4 bg-slate-900/40 p-4 rounded-xl border border-slate-800/60 w-fit">
-          
-          {/* Year selector */}
-          <div class="flex flex-col">
-            <span class="text-[9px] text-slate-500 font-bold uppercase mb-1">Fiscal Year</span>
-            <select
-              value={localYear}
-              onChange={(e) => {
-                setLocalYear(e.target.value);
-                setLocalMonth('All');
-              }}
-              class="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500"
-            >
-              <option value="All">All Years</option>
-              <option value="2024">2024–25</option>
-              <option value="2023">2023–24</option>
-              <option value="2022">2022–23</option>
-              <option value="2021">2021–22</option>
-              <option value="2020">2020–21</option>
-              <option value="2019">2019–20</option>
-              <option value="2018">2018–19</option>
-              <option value="2017">2017–18</option>
-              <option value="2016">2016–17</option>
-            </select>
-          </div>
-
-          {/* Month selector */}
-          <div class="flex flex-col">
-            <span class="text-[9px] text-slate-500 font-bold uppercase mb-1">Month</span>
-            <select
-              value={localMonth}
-              onChange={(e) => handleMonthChange(e.target.value)}
-              class="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500"
-            >
-              {months.map(m => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Date range picker */}
-          <div class="flex items-center gap-2">
+        <div class="flex flex-col gap-2 bg-slate-900/40 p-4 rounded-xl border border-slate-800/60 w-fit">
+          <div class="flex flex-wrap items-center gap-4">
+            {/* Start Date picker */}
             <div class="flex flex-col">
               <span class="text-[9px] text-slate-500 font-bold uppercase mb-1">Start Date</span>
               <input 
                 type="date" 
-                min={yearMin}
-                max={yearMax}
                 value={inputStartDate} 
                 onChange={(e) => setInputStartDate(e.target.value)}
-                class="bg-slate-950 border border-slate-800 rounded px-2.5 py-0.5 text-xs text-slate-300 focus:outline-none"
+                class="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500 cursor-pointer"
               />
             </div>
-            <span class="text-slate-600 mt-3">—</span>
+
+            {/* End Date picker */}
             <div class="flex flex-col">
               <span class="text-[9px] text-slate-500 font-bold uppercase mb-1">End Date</span>
               <input 
                 type="date" 
-                min={yearMin}
-                max={yearMax}
                 value={inputEndDate} 
                 onChange={(e) => setInputEndDate(e.target.value)}
-                class="bg-slate-950 border border-slate-800 rounded px-2.5 py-0.5 text-xs text-slate-300 focus:outline-none"
+                class="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500 cursor-pointer"
               />
             </div>
+
+            {/* Apply Filter Button */}
+            <button
+              onClick={handleApplyFilter}
+              class="bg-blue-600 hover:bg-blue-500 text-white border border-blue-500 hover:border-blue-400 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none self-end cursor-pointer shadow-lg shadow-blue-500/20"
+            >
+              Apply Filter
+            </button>
+
+            {/* Reset Filter Button */}
+            <button
+              onClick={resetFilters}
+              class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none self-end cursor-pointer"
+            >
+              Reset
+            </button>
           </div>
 
-          {/* Apply Filter Button */}
-          <button
-            onClick={handleApplyFilter}
-            class="bg-blue-600 hover:bg-blue-500 text-white border border-blue-500 hover:border-blue-400 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none self-end cursor-pointer"
-          >
-            Apply Filter
-          </button>
-
-          {/* Reset Filter Button */}
-          <button
-            onClick={resetFilters}
-            class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none self-end cursor-pointer"
-          >
-            Reset
-          </button>
-
+          {/* Validation Error Banner */}
+          {validationError && (
+            <div class="text-rose-400 text-[10px] font-semibold flex items-center gap-1.5 mt-1">
+              <AlertCircle class="h-3.5 w-3.5 shrink-0" />
+              <span>{validationError}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -364,7 +293,7 @@ export default function Gantt({ token, selectedYear }) {
         {!hasValidRange ? (
           <div class="p-12 text-center text-slate-400">
             <Calendar class="h-8 w-8 text-yellow-500 mx-auto mb-3 animate-pulse" />
-            <p class="font-semibold text-sm">Invalid date input. Please check your range entries.</p>
+            <p class="font-semibold text-sm">Please select a valid date range to display the timeline.</p>
           </div>
         ) : vessels.length === 0 || activeVesselsInWindow.length === 0 ? (
           <div class="p-12 text-center text-slate-400">
