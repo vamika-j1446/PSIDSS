@@ -76,6 +76,22 @@ function generateAutoTitle(firstMsg) {
   return words.join(' ') || 'New Chat';
 }
 
+function extractYears(msg) {
+  const matches = msg.match(/\b20\d{2}\b/g);
+  if (matches && matches.length >= 2) {
+    return {
+      startYear: parseInt(matches[0], 10),
+      endYear: parseInt(matches[1], 10)
+    };
+  } else if (matches && matches.length === 1) {
+    return {
+      startYear: parseInt(matches[0], 10),
+      endYear: parseInt(matches[0], 10)
+    };
+  }
+  return null;
+}
+
 function getCached(key) {
   const cached = cacheHelper.get(key);
   if (cached && Date.now() < cached.expiresAt) {
@@ -287,241 +303,349 @@ const chatbotController = {
           source = "system";
           console.timeEnd("chatbot-intent");
         } else {
-          // C. Data Intent Detections
-          console.time("chatbot-sql");
-          const isTopCust = cleanMsg.includes('top customer') || cleanMsg.includes('highest revenue customer') || cleanMsg.includes('party generated highest') || cleanMsg.includes('who is the top customer') || cleanMsg.includes('top company');
-          const isTopBerth = cleanMsg.includes('top berth') || cleanMsg.includes('highest revenue berth') || cleanMsg.includes('berth has highest') || cleanMsg.includes('berth by revenue') || cleanMsg.includes('which berth');
-          const isTrend = cleanMsg.includes('revenue trend') || cleanMsg.includes('revenue increasing') || cleanMsg.includes('growth over years') || cleanMsg.includes('revenue growth trend') || cleanMsg.includes('show trend') || cleanMsg.includes('is revenue growing') || cleanMsg.includes('is revenue increasing') || cleanMsg.includes('is port revenue decreasing');
-          const isCommodity = cleanMsg.includes('top commodity') || cleanMsg.includes('top cargo') || cleanMsg.includes('commodity group earns') || cleanMsg.includes('commodity earns most') || cleanMsg.includes('what cargo group') || cleanMsg.includes('commodity group');
-          const isConcentration = cleanMsg.includes('customer concentration') || cleanMsg.includes('dependent on few customer') || cleanMsg.includes('revenue dependent on few') || cleanMsg.includes('explain customer concentration');
-          const isSim = cleanMsg.includes('tariff simulation') || cleanMsg.includes('tariff increases by') || cleanMsg.includes('simulation work') || cleanMsg.includes('simulate tariff');
-          const isRevenue = cleanMsg.includes('revenue') || cleanMsg.includes('billing receipts') || cleanMsg.includes('invoice amount') || cleanMsg.includes('earnings') || cleanMsg.includes('income');
+          // C. Check Web Application & Dashboard guides
+          const isDashboardInfo = cleanMsg.includes('dashboard do') || cleanMsg.includes('what is psidss') || cleanMsg.includes('what does this web app') || cleanMsg.includes('system do') || cleanMsg.includes('what this dashboard');
+          const isHistoricalInfo = cleanMsg.includes('historical page') || cleanMsg.includes('historical analysis') || cleanMsg.includes('past financial') || cleanMsg.includes('what is the historical');
+          const isSimulationInfo = cleanMsg.includes('simulation sandbox') || cleanMsg.includes('sandbox page') || cleanMsg.includes('what is the sandbox') || cleanMsg.includes('simulation page');
+          const isDataInfo = cleanMsg.includes('data is used') || cleanMsg.includes('what data') || cleanMsg.includes('uploaded records') || cleanMsg.includes('uploaded files') || cleanMsg.includes('records used') || cleanMsg.includes('dataset');
+          const isStrategicInfo = cleanMsg.includes('strategic page') || cleanMsg.includes('strategic risks') || cleanMsg.includes('risks page');
+          const isPredictiveInfo = cleanMsg.includes('predictive page') || cleanMsg.includes('predictive insights') || cleanMsg.includes('forecast page');
+          const isAdvisoryInfo = cleanMsg.includes('advisory page') || cleanMsg.includes('advisory briefings') || cleanMsg.includes('recommendations page') || cleanMsg.includes('briefing');
 
-          // Build SQL filters
-          const conditions = [];
-          const replacements = {};
+          if (isDashboardInfo) {
+            answer = "PSIDSS is a Port Strategic Intelligence and Decision Support System. It analyzes uploaded Cochin Port financial records and provides revenue trends, customer insights, berth performance, commodity/category analysis, tariff simulation, predictions, and executive recommendations.";
+            type = "explanation";
+            source = "system";
+          } else if (isHistoricalInfo) {
+            answer = "The Historical page shows past financial performance using uploaded records. It includes revenue trends, customer revenue share, berth-wise revenue, commodity/category distribution, and fiscal-year comparisons.";
+            type = "explanation";
+            source = "system";
+          } else if (isSimulationInfo) {
+            answer = "The Simulation Sandbox estimates the financial impact of tariff changes. It applies the selected tariff percentage to historical billing revenue and shows base revenue, simulated revenue, and revenue difference.";
+            type = "explanation";
+            source = "system";
+          } else if (isStrategicInfo) {
+            answer = "The Strategic Risks page displays calculated business risk metrics such as revenue concentration, customer performance, berth performance, and commodity growth trends based on uploaded port financial histories.";
+            type = "explanation";
+            source = "system";
+          } else if (isPredictiveInfo) {
+            answer = "The Predictive Insights page provides forecasts for revenue, commodities, customers, and berths using predictive regressions over uploaded financial histories.";
+            type = "explanation";
+            source = "system";
+          } else if (isAdvisoryInfo) {
+            answer = "The Advisory Briefs page outlines data-driven business recommendations (e.g. SLAs, retention strategies, berth optimization) based on SQLite analysis of the billing records.";
+            type = "explanation";
+            source = "system";
+          } else if (isDataInfo) {
+            answer = "This project uses uploaded Cochin Port financial records. Key fields include invoice amount, source financial year, berth, vessel name, VCN, party name, commodity, commodity group, charge name, and vessel type.";
+            type = "explanation";
+            source = "system";
+          } else {
+            // D. Check CAGR Calculations
+            const isCagrCalculation = cleanMsg.includes('cagr') || cleanMsg.includes('compound annual') || 
+                                      cleanMsg.includes('annual growth') || cleanMsg.includes('growth rate from') || 
+                                      cleanMsg.includes('revenue growth from');
 
-          if (yearScope && yearScope !== 'All' && yearScope !== 'All Fiscal Years' && yearScope !== 'all') {
-            if (yearScope === 'Recent4') {
-              conditions.push('source_year BETWEEN 2021 AND 2024');
-            } else {
-              const numYear = parseInt(yearScope, 10);
-              if (!isNaN(numYear)) {
-                conditions.push('source_year = :yearScope');
-                replacements.yearScope = numYear;
-              }
-            }
-          }
-
-          if (req.user) {
-            if (req.user.role === 'Party' && req.user.party_name) {
-              conditions.push('party_name = :userPartyName');
-              replacements.userPartyName = req.user.party_name;
-            } else if (req.user.role === 'VCN' && req.user.vcn) {
-              conditions.push('vcn = :userVcn');
-              replacements.userVcn = req.user.vcn;
-            }
-          }
-
-          const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-
-          if (isTopCust) {
-            const cacheKey = `chatbot_top_customer_${yearScope}_${userKey}`;
-            const cached = getCached(cacheKey);
-            if (cached) {
-              answer = cached;
-            } else {
-              const result = await sequelize.query(`
-                SELECT party_name, SUM(invoice_amount) as revenue
-                FROM PortRecords
-                ${whereClause}
-                GROUP BY party_name
-                ORDER BY revenue DESC
-                LIMIT 1
-              `, { type: QueryTypes.SELECT, replacements });
-
-              const totalResult = await sequelize.query(`
-                SELECT COALESCE(SUM(invoice_amount), 0) as total
-                FROM PortRecords
-                ${whereClause}
-              `, { type: QueryTypes.SELECT, replacements });
-
-              if (result.length > 0) {
-                const custName = result[0].party_name;
-                const custRev = parseFloat(result[0].revenue) || 0;
-                const totalRev = parseFloat(totalResult[0].total) || 1.0;
-                const share = (custRev / totalRev) * 100;
-                answer = `The top customer is ${custName}, contributing ${formatCurrencyMsg(custRev)}. This represents about ${share.toFixed(2)}% of total revenue for the selected period, so it is one of the port’s most important billing partners. This is based on Cochin Port uploaded financial records.`;
+            if (isCagrCalculation) {
+              const parsedYears = extractYears(cleanMsg);
+              if (!parsedYears) {
+                answer = "To calculate CAGR, please provide a valid start year and end year range, such as: 'Calculate CAGR from FY2021–22 to FY2024–25'.";
+                type = "yearly_trend";
+                source = "system";
               } else {
-                answer = "No customer revenue records found for the selected scope.";
-              }
-              setCached(cacheKey, answer);
-            }
-            type = "top_customer";
-            source = "database";
-          } else if (isTopBerth) {
-            const cacheKey = `chatbot_top_berth_${yearScope}_${userKey}`;
-            const cached = getCached(cacheKey);
-            if (cached) {
-              answer = cached;
-            } else {
-              const result = await sequelize.query(`
-                SELECT berth, SUM(invoice_amount) as revenue
-                FROM PortRecords
-                ${whereClause}
-                GROUP BY berth
-                ORDER BY revenue DESC
-                LIMIT 1
-              `, { type: QueryTypes.SELECT, replacements });
+                const { startYear, endYear } = parsedYears;
 
-              if (result.length > 0) {
-                const berth = result[0].berth;
-                const rev = parseFloat(result[0].revenue) || 0;
-                answer = `The highest revenue-generating berth is Berth ${berth} with ${formatCurrencyMsg(rev)} in revenue for the selected period. This means Berth ${berth} is a major revenue contributor and tariff or operational decisions related to this berth can have a strong financial impact. This is based on Cochin Port uploaded financial records.`;
-              } else {
-                answer = "No berth revenue records found for the selected scope.";
-              }
-              setCached(cacheKey, answer);
-            }
-            type = "top_berth";
-            source = "database";
-          } else if (isTrend) {
-            const cacheKey = `chatbot_revenue_trend_${yearScope}_${userKey}`;
-            const cached = getCached(cacheKey);
-            if (cached) {
-              answer = cached;
-            } else {
-              const result = await sequelize.query(`
-                SELECT source_year as year, SUM(invoice_amount) as revenue
-                FROM PortRecords
-                ${whereClause}
-                GROUP BY source_year
-                ORDER BY source_year ASC
-              `, { type: QueryTypes.SELECT, replacements });
+                if (startYear === endYear) {
+                  const result = await sequelize.query(`
+                    SELECT COALESCE(SUM(invoice_amount), 0) as revenue
+                    FROM PortRecords
+                    WHERE source_year = :year
+                  `, { type: QueryTypes.SELECT, replacements: { year: startYear } });
 
-              if (result.length >= 2) {
-                const year1 = result[0].year;
-                const rev1 = parseFloat(result[0].revenue) || 0;
-                const yearN = result[result.length - 1].year;
-                const revN = parseFloat(result[result.length - 1].revenue) || 0;
-                const growth = ((revN - rev1) / rev1) * 100;
+                  const rev = parseFloat(result[0].revenue) || 0;
+                  const revFormatted = rev > 0 ? formatCurrencyMsg(rev) : "₹0";
 
-                let hasDecline = false;
-                for (let i = 1; i < result.length; i++) {
-                  if (parseFloat(result[i].revenue) < parseFloat(result[i - 1].revenue)) {
-                    hasDecline = true;
+                  answer = `CAGR cannot be calculated for FY${startYear}–${(startYear % 100 + 1)} to FY${endYear}–${(endYear % 100 + 1)} because both years are the same. CAGR needs at least two different financial years to measure growth. Revenue for FY${startYear}–${(startYear % 100 + 1)} is ${revFormatted}. Try asking: “Calculate CAGR from FY2021–22 to FY2024–25.”`;
+                  type = "yearly_trend";
+                  source = "database";
+                } else if (startYear > endYear) {
+                  answer = "The start year should be earlier than the end year. Please try a range like FY2021–22 to FY2024–25.";
+                  type = "yearly_trend";
+                  source = "system";
+                } else {
+                  // Run SQL
+                  const result = await sequelize.query(`
+                    SELECT source_year, SUM(invoice_amount) AS revenue
+                    FROM PortRecords
+                    WHERE source_year IN (:startYear, :endYear)
+                    GROUP BY source_year
+                  `, { type: QueryTypes.SELECT, replacements: { startYear, endYear } });
+
+                  const startRow = result.find(r => parseInt(r.source_year) === startYear);
+                  const endRow = result.find(r => parseInt(r.source_year) === endYear);
+
+                  if (!startRow || !endRow) {
+                    answer = "I could not find revenue records for one of the selected financial years. Available years are FY2016–17 to FY2024–25.";
+                    type = "yearly_trend";
+                    source = "database";
+                  } else {
+                    const startRevenue = parseFloat(startRow.revenue) || 0;
+                    const endRevenue = parseFloat(endRow.revenue) || 0;
+
+                    if (startRevenue <= 0 || endRevenue <= 0) {
+                      answer = "CAGR cannot be calculated because one or both selected years have zero or negative revenue.";
+                      type = "yearly_trend";
+                      source = "database";
+                    } else {
+                      const numberOfYears = endYear - startYear;
+                      const cagrValue = (Math.pow(endRevenue / startRevenue, 1 / numberOfYears) - 1) * 100;
+
+                      answer = `The CAGR from FY${startYear}–${(startYear % 100 + 1)} to FY${endYear}–${(endYear % 100 + 1)} is approximately ${cagrValue.toFixed(2)}% per year. Revenue increased from ${formatCurrencyMsg(startRevenue)} in FY${startYear}–${(startYear % 100 + 1)} to ${formatCurrencyMsg(endRevenue)} in FY${endYear}–${(endYear % 100 + 1)}. This means port revenue grew at an average annual rate of about ${cagrValue.toFixed(2)}% during this period.`;
+                      type = "yearly_trend";
+                      source = "database";
+                    }
                   }
                 }
-
-                const directAnswer = revN > rev1 ? "Yes, revenue is increasing overall." : "No, revenue is decreasing overall.";
-                const evidence = `Revenue grew from ${formatCurrencyMsg(rev1)} in FY${year1}–${(year1 % 100 + 1)} to ${formatCurrencyMsg(revN)} in FY${yearN}–${(yearN % 100 + 1)}, which is about +${growth.toFixed(0)}% overall growth.`;
-                const interpretation = hasDecline 
-                  ? "There was an early drop in FY2017–18, but from FY2018–19 onward the trend is mostly upward. This indicates positive long-term revenue growth"
-                  : "The revenue has shown consistent year-over-year gains across the years, indicating strong financial momentum";
-
-                answer = `${directAnswer} ${evidence} ${interpretation} based on uploaded financial records.`;
-              } else if (result.length === 1) {
-                answer = `The revenue for the selected scope is ${formatCurrencyMsg(result[0].revenue)}. A multi-year comparison is required to show a trend.`;
-              } else {
-                answer = "No revenue records were found for the selected scope.";
               }
-              setCached(cacheKey, answer);
-            }
-            type = "yearly_trend";
-            source = "database";
-          } else if (isCommodity) {
-            const cacheKey = `chatbot_top_commodity_${yearScope}_${userKey}`;
-            const cached = getCached(cacheKey);
-            if (cached) {
-              answer = cached;
             } else {
-              const result = await sequelize.query(`
-                SELECT 
-                  COALESCE(NULLIF(commodity_group, ''), commodity) as name, 
-                  SUM(invoice_amount) as revenue
-                FROM PortRecords
-                ${whereClause}
-                GROUP BY name
-                ORDER BY revenue DESC
-                LIMIT 1
-              `, { type: QueryTypes.SELECT, replacements });
+              // E. Common Database questions
+              console.time("chatbot-sql");
+              const isTopCust = cleanMsg.includes('top customer') || cleanMsg.includes('highest revenue customer') || cleanMsg.includes('party generated highest') || cleanMsg.includes('who is the top customer') || cleanMsg.includes('top company');
+              const isTopBerth = cleanMsg.includes('top berth') || cleanMsg.includes('highest revenue berth') || cleanMsg.includes('berth has highest') || cleanMsg.includes('berth by revenue') || cleanMsg.includes('which berth');
+              const isTrend = cleanMsg.includes('revenue trend') || cleanMsg.includes('revenue increasing') || cleanMsg.includes('growth over years') || cleanMsg.includes('revenue growth trend') || cleanMsg.includes('show trend') || cleanMsg.includes('is revenue growing') || cleanMsg.includes('is revenue increasing') || cleanMsg.includes('is port revenue decreasing');
+              const isCommodity = cleanMsg.includes('top commodity') || cleanMsg.includes('top cargo') || cleanMsg.includes('commodity group earns') || cleanMsg.includes('commodity earns most') || cleanMsg.includes('what cargo group') || cleanMsg.includes('commodity group');
+              const isConcentration = cleanMsg.includes('customer concentration') || cleanMsg.includes('dependent on few customer') || cleanMsg.includes('revenue dependent on few') || cleanMsg.includes('explain customer concentration');
+              const isSim = cleanMsg.includes('tariff simulation') || cleanMsg.includes('tariff increases by') || cleanMsg.includes('simulation work') || cleanMsg.includes('simulate tariff');
+              const isRevenue = cleanMsg.includes('revenue') || cleanMsg.includes('billing receipts') || cleanMsg.includes('invoice amount') || cleanMsg.includes('earnings') || cleanMsg.includes('income');
 
-              if (result.length > 0) {
-                const name = result[0].name;
-                const rev = parseFloat(result[0].revenue) || 0;
-                answer = `The top cargo category is '${name}', contributing a total revenue of ${formatCurrencyMsg(rev)} for the selected period. This indicates that '${name}' cargo handling constitutes a major volume and billing line for the port. This is based on Cochin Port uploaded financial records.`;
-              } else {
-                answer = "No commodity cargo records found for the selected scope.";
-              }
-              setCached(cacheKey, answer);
-            }
-            type = "top_commodity";
-            source = "database";
-          } else if (isConcentration) {
-            const cacheKey = `chatbot_concentration_${yearScope}_${userKey}`;
-            const cached = getCached(cacheKey);
-            if (cached) {
-              answer = cached;
-            } else {
-              const custResult = await sequelize.query(`
-                SELECT party_name, SUM(invoice_amount) as revenue
-                FROM PortRecords
-                ${whereClause}
-                GROUP BY party_name
-                ORDER BY revenue DESC
-              `, { type: QueryTypes.SELECT, replacements });
+              // Build SQL filters
+              const conditions = [];
+              const replacements = {};
 
-              if (custResult.length > 0) {
-                const totalRev = custResult.reduce((sum, c) => sum + parseFloat(c.revenue), 0) || 1.0;
-                const top1 = parseFloat(custResult[0].revenue);
-                const top5 = custResult.slice(0, 5).reduce((sum, c) => sum + parseFloat(c.revenue), 0);
-                const top1Share = (top1 / totalRev) * 100;
-                const top5Share = (top5 / totalRev) * 100;
-
-                let severity = 'low customer dependency risk';
-                if (top1Share > 25 || top5Share > 60) {
-                  severity = 'high customer concentration risk, indicating strong dependency on a few key customers';
-                } else if (top5Share > 40) {
-                  severity = 'moderate customer concentration risk';
+              if (yearScope && yearScope !== 'All' && yearScope !== 'All Fiscal Years' && yearScope !== 'all') {
+                if (yearScope === 'Recent4') {
+                  conditions.push('source_year BETWEEN 2021 AND 2024');
+                } else {
+                  const numYear = parseInt(yearScope, 10);
+                  if (!isNaN(numYear)) {
+                    conditions.push('source_year = :yearScope');
+                    replacements.yearScope = numYear;
+                  }
                 }
-
-                answer = `Based on the uploaded Cochin Port billing records, the top customer represents ${top1Share.toFixed(2)}% of total revenue, and the top 5 customers represent ${top5Share.toFixed(2)}%. This indicates a ${severity}.`;
-              } else {
-                answer = "No customer billing records available to calculate concentration.";
               }
-              setCached(cacheKey, answer);
-            }
-            type = "dictionary";
-            source = "database";
-          } else if (isSim) {
-            answer = "Tariff Simulation is a what-if calculation. It estimates how revenue may change if tariffs increase or decrease. In this project, it applies the selected percentage change to historical billing revenue.";
-            type = "tariff_simulation";
-            source = "system";
-          } else if (isRevenue) {
-            const cacheKey = `chatbot_total_revenue_${yearScope}_${userKey}`;
-            const cached = getCached(cacheKey);
-            if (cached) {
-              answer = cached;
-            } else {
-              const result = await sequelize.query(`
-                SELECT COALESCE(SUM(invoice_amount), 0) as totalRevenue
-                FROM PortRecords
-                ${whereClause}
-              `, { type: QueryTypes.SELECT, replacements });
 
-              const rev = parseFloat(result[0].totalRevenue) || 0;
-              const formattedRev = rev > 0 ? formatCurrencyMsg(rev) : "No revenue records were found for the selected scope.";
-              answer = `Total Port Revenue is the total billing amount generated from all uploaded port financial records. It is calculated as SUM(invoice_amount) from the PortRecords table. For the selected period (${yearScope === 'Recent4' ? 'FY 2021–22 to FY 2024–25' : yearScope === 'All' ? 'All Fiscal Years' : `FY ${yearScope}–${parseInt(yearScope)%100+1}`}), total revenue is ${formattedRev}. This is a financial billing metric, not cargo volume or profit.`;
-              setCached(cacheKey, answer);
+              if (req.user) {
+                if (req.user.role === 'Party' && req.user.party_name) {
+                  conditions.push('party_name = :userPartyName');
+                  replacements.userPartyName = req.user.party_name;
+                } else if (req.user.role === 'VCN' && req.user.vcn) {
+                  conditions.push('vcn = :userVcn');
+                  replacements.userVcn = req.user.vcn;
+                }
+              }
+
+              const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+              if (isTopCust) {
+                const cacheKey = `chatbot_top_customer_${yearScope}_${userKey}`;
+                const cached = getCached(cacheKey);
+                if (cached) {
+                  answer = cached;
+                } else {
+                  const result = await sequelize.query(`
+                    SELECT party_name, SUM(invoice_amount) as revenue
+                    FROM PortRecords
+                    ${whereClause}
+                    GROUP BY party_name
+                    ORDER BY revenue DESC
+                    LIMIT 1
+                  `, { type: QueryTypes.SELECT, replacements });
+
+                  const totalResult = await sequelize.query(`
+                    SELECT COALESCE(SUM(invoice_amount), 0) as total
+                    FROM PortRecords
+                    ${whereClause}
+                  `, { type: QueryTypes.SELECT, replacements });
+
+                  if (result.length > 0) {
+                    const custName = result[0].party_name;
+                    const custRev = parseFloat(result[0].revenue) || 0;
+                    const totalRev = parseFloat(totalResult[0].total) || 1.0;
+                    const share = (custRev / totalRev) * 100;
+                    answer = `The top customer is ${custName}, contributing ${formatCurrencyMsg(custRev)}. This represents about ${share.toFixed(2)}% of total revenue for the selected period, so it is one of the port’s most important billing partners. This is based on Cochin Port uploaded financial records.`;
+                  } else {
+                    answer = "No customer revenue records found for the selected scope.";
+                  }
+                  setCached(cacheKey, answer);
+                }
+                type = "top_customer";
+                source = "database";
+              } else if (isTopBerth) {
+                const cacheKey = `chatbot_top_berth_${yearScope}_${userKey}`;
+                const cached = getCached(cacheKey);
+                if (cached) {
+                  answer = cached;
+                } else {
+                  const result = await sequelize.query(`
+                    SELECT berth, SUM(invoice_amount) as revenue
+                    FROM PortRecords
+                    ${whereClause}
+                    GROUP BY berth
+                    ORDER BY revenue DESC
+                    LIMIT 1
+                  `, { type: QueryTypes.SELECT, replacements });
+
+                  if (result.length > 0) {
+                    const berth = result[0].berth;
+                    const rev = parseFloat(result[0].revenue) || 0;
+                    answer = `The highest revenue-generating berth is Berth ${berth} with ${formatCurrencyMsg(rev)} in revenue for the selected period. This means Berth ${berth} is a major revenue contributor and tariff or operational decisions related to this berth can have a strong financial impact. This is based on Cochin Port uploaded financial records.`;
+                  } else {
+                    answer = "No berth revenue records found for the selected scope.";
+                  }
+                  setCached(cacheKey, answer);
+                }
+                type = "top_berth";
+                source = "database";
+              } else if (isTrend) {
+                const cacheKey = `chatbot_revenue_trend_${yearScope}_${userKey}`;
+                const cached = getCached(cacheKey);
+                if (cached) {
+                  answer = cached;
+                } else {
+                  const result = await sequelize.query(`
+                    SELECT source_year as year, SUM(invoice_amount) as revenue
+                    FROM PortRecords
+                    ${whereClause}
+                    GROUP BY source_year
+                    ORDER BY source_year ASC
+                  `, { type: QueryTypes.SELECT, replacements });
+
+                  if (result.length >= 2) {
+                    const year1 = result[0].year;
+                    const rev1 = parseFloat(result[0].revenue) || 0;
+                    const yearN = result[result.length - 1].year;
+                    const revN = parseFloat(result[result.length - 1].revenue) || 0;
+                    const growth = ((revN - rev1) / rev1) * 100;
+
+                    let hasDecline = false;
+                    for (let i = 1; i < result.length; i++) {
+                      if (parseFloat(result[i].revenue) < parseFloat(result[i - 1].revenue)) {
+                        hasDecline = true;
+                      }
+                    }
+
+                    const directAnswer = revN > rev1 ? "Yes, revenue is increasing overall." : "No, revenue is decreasing overall.";
+                    const evidence = `Revenue grew from ${formatCurrencyMsg(rev1)} in FY${year1}–${(year1 % 100 + 1)} to ${formatCurrencyMsg(revN)} in FY${yearN}–${(yearN % 100 + 1)}, which is about +${growth.toFixed(0)}% overall growth.`;
+                    const interpretation = hasDecline 
+                      ? "There was an early drop in FY2017–18, but from FY2018–19 onward the trend is mostly upward. This indicates positive long-term revenue growth"
+                      : "The revenue has shown consistent year-over-year gains across the years, indicating strong financial momentum";
+
+                    answer = `${directAnswer} ${evidence} ${interpretation} based on uploaded financial records.`;
+                  } else if (result.length === 1) {
+                    answer = `The revenue for the selected scope is ${formatCurrencyMsg(result[0].revenue)}. A multi-year comparison is required to show a trend.`;
+                  } else {
+                    answer = "No revenue records were found for the selected scope.";
+                  }
+                  setCached(cacheKey, answer);
+                }
+                type = "yearly_trend";
+                source = "database";
+              } else if (isCommodity) {
+                const cacheKey = `chatbot_top_commodity_${yearScope}_${userKey}`;
+                const cached = getCached(cacheKey);
+                if (cached) {
+                  answer = cached;
+                } else {
+                  const result = await sequelize.query(`
+                    SELECT 
+                      COALESCE(NULLIF(commodity_group, ''), commodity) as name, 
+                      SUM(invoice_amount) as revenue
+                    FROM PortRecords
+                    ${whereClause}
+                    GROUP BY name
+                    ORDER BY revenue DESC
+                    LIMIT 1
+                  `, { type: QueryTypes.SELECT, replacements });
+
+                  if (result.length > 0) {
+                    const name = result[0].name;
+                    const rev = parseFloat(result[0].revenue) || 0;
+                    answer = `The top cargo category is '${name}', contributing a total revenue of ${formatCurrencyMsg(rev)} for the selected period. This indicates that '${name}' cargo handling constitutes a major volume and billing line for the port. This is based on Cochin Port uploaded financial records.`;
+                  } else {
+                    answer = "No commodity cargo records found for the selected scope.";
+                  }
+                  setCached(cacheKey, answer);
+                }
+                type = "top_commodity";
+                source = "database";
+              } else if (isConcentration) {
+                const cacheKey = `chatbot_concentration_${yearScope}_${userKey}`;
+                const cached = getCached(cacheKey);
+                if (cached) {
+                  answer = cached;
+                } else {
+                  const custResult = await sequelize.query(`
+                    SELECT party_name, SUM(invoice_amount) as revenue
+                    FROM PortRecords
+                    ${whereClause}
+                    GROUP BY party_name
+                    ORDER BY revenue DESC
+                  `, { type: QueryTypes.SELECT, replacements });
+
+                  if (custResult.length > 0) {
+                    const totalRev = custResult.reduce((sum, c) => sum + parseFloat(c.revenue), 0) || 1.0;
+                    const top1 = parseFloat(custResult[0].revenue);
+                    const top5 = custResult.slice(0, 5).reduce((sum, c) => sum + parseFloat(c.revenue), 0);
+                    const top1Share = (top1 / totalRev) * 100;
+                    const top5Share = (top5 / totalRev) * 100;
+
+                    let severity = 'low customer dependency risk';
+                    if (top1Share > 25 || top5Share > 60) {
+                      severity = 'high customer concentration risk, indicating strong dependency on a few key customers';
+                    } else if (top5Share > 40) {
+                      severity = 'moderate customer concentration risk';
+                    }
+
+                    answer = `Based on the uploaded Cochin Port billing records, the top customer represents ${top1Share.toFixed(2)}% of total revenue, and the top 5 customers represent ${top5Share.toFixed(2)}%. This indicates a ${severity}.`;
+                  } else {
+                    answer = "No customer billing records available to calculate concentration.";
+                  }
+                  setCached(cacheKey, answer);
+                }
+                type = "dictionary";
+                source = "database";
+              } else if (isSim) {
+                answer = "Tariff Simulation is a what-if calculation. It estimates how revenue may change if tariffs increase or decrease. In this project, it applies the selected percentage change to historical billing revenue.";
+                type = "tariff_simulation";
+                source = "system";
+              } else if (isRevenue) {
+                const cacheKey = `chatbot_total_revenue_${yearScope}_${userKey}`;
+                const cached = getCached(cacheKey);
+                if (cached) {
+                  answer = cached;
+                } else {
+                  const result = await sequelize.query(`
+                    SELECT COALESCE(SUM(invoice_amount), 0) as totalRevenue
+                    FROM PortRecords
+                    ${whereClause}
+                  `, { type: QueryTypes.SELECT, replacements });
+
+                  const rev = parseFloat(result[0].totalRevenue) || 0;
+                  const formattedRev = rev > 0 ? formatCurrencyMsg(rev) : "No revenue records were found for the selected scope.";
+                  answer = `Total Port Revenue is the total billing amount generated from all uploaded port financial records. It is calculated as SUM(invoice_amount) from the PortRecords table. For the selected period (${yearScope === 'Recent4' ? 'FY 2021–22 to FY 2024–25' : yearScope === 'All' ? 'All Fiscal Years' : `FY ${yearScope}–${parseInt(yearScope)%100+1}`}), total revenue is ${formattedRev}. This is a financial billing metric, not cargo volume or profit.`;
+                  setCached(cacheKey, answer);
+                }
+                type = "revenue_explanation";
+                source = "database";
+              } else {
+                // F. Standard Safe Fallback Message
+                answer = "I can answer questions related to PSIDSS, Cochin Port financial records, revenue, berths, customers, commodities, tariff simulation, CAGR, HHI, VCN, GRT, and dashboard pages. Could you rephrase your question with one of these topics?";
+                type = "unsupported";
+                source = "system";
+              }
+              console.timeEnd("chatbot-sql");
             }
-            type = "revenue_explanation";
-            source = "database";
-          } else {
-            answer = "I cannot find an answer to this question in the port dictionary or database. Please ask about revenue, berths, customers, commodities, or tariff terms.";
-            type = "unsupported";
-            source = "system";
           }
-          console.timeEnd("chatbot-sql");
           console.timeEnd("chatbot-intent");
         }
       }
@@ -538,14 +662,12 @@ const chatbotController = {
       // 7. Save conversation to Database Asynchronously (Out of response thread)
       setImmediate(async () => {
         try {
-          // Save User message
           await ChatMessage.create({
             session_id: session.id,
             role: 'user',
             message: message
           });
 
-          // Save Assistant message
           await ChatMessage.create({
             session_id: session.id,
             role: 'assistant',
@@ -554,7 +676,6 @@ const chatbotController = {
             type: type
           });
 
-          // Update title if New Chat
           if (session.title === 'New Chat') {
             const autoTitle = generateAutoTitle(message);
             session.title = autoTitle;

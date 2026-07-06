@@ -19,3 +19,8 @@
 - [x] Add backend timing console logs to identify bottlenecks
 - [x] Implement double-submit click guards and input disables to prevent duplicate chatbot calls
 - [x] Open chat panels instantly and warm up greetings immediately
+- [x] Support full-range CAGR calculation with year extraction (FY2021, 2021, FY 2021-22, etc.)
+- [x] Add same-year CAGR calculation fallback returning single year revenue
+- [x] Handle startYear > endYear invalid CAGR sequences gracefully
+- [x] Add web application information guides (Dashboard, Historical, Simulation, Strategic, Predictive, Advisory, dataset details)
+- [x] Configure descriptive fallback message for off-topic questions
