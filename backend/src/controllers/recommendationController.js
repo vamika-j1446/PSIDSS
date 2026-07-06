@@ -98,7 +98,7 @@ const recommendationController = {
             SUM(CASE WHEN source_year = :prevYr THEN invoice_amount ELSE 0 END) as prevRev,
             SUM(CASE WHEN source_year = :latestYr THEN invoice_amount ELSE 0 END) as latestRev
           FROM PortRecords
-          ${whereClause}
+          ${whereClause ? `${whereClause} AND source_year IN (:prevYr, :latestYr)` : 'WHERE source_year IN (:prevYr, :latestYr)'}
           GROUP BY party_name
           HAVING prevRev >= 5000000 AND ((prevRev - latestRev) / prevRev) > 0.3
           ORDER BY (prevRev - latestRev) DESC
@@ -155,7 +155,7 @@ const recommendationController = {
               SUM(CASE WHEN source_year = :latestYr THEN invoice_amount ELSE 0 END) as latest,
               SUM(CASE WHEN source_year = :prevYr THEN invoice_amount ELSE 0 END) as prev
             FROM PortRecords
-            ${whereClause}
+            ${whereClause ? `${whereClause} AND source_year IN (:prevYr, :latestYr)` : 'WHERE source_year IN (:prevYr, :latestYr)'}
             GROUP BY name
           ) as c
           WHERE c.name IS NOT NULL AND c.name != "" AND ${commodityCondition}

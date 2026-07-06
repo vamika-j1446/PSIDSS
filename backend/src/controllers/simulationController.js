@@ -107,7 +107,7 @@ const simulationController = {
 
         // 3. Projection raw data
         const projConditions = [];
-        const projReplacements = {};
+        const projReplacements = { ...replacements };
 
         if (selectedBerth && selectedBerth !== 'All' && selectedBerth !== 'all') {
           projConditions.push('berth = :selectedBerth');
