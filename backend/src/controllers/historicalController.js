@@ -209,20 +209,43 @@ const historicalController = {
 
       const f1 = getYearFilter(req, true); // hasWhereAlready = true
 
-      const commodityData = await sequelize.query(`
+      const query = `
         SELECT 
-          commodity as name, 
-          SUM(invoice_amount) as value
+          COALESCE(NULLIF(TRIM(commodity_group), ''), NULLIF(TRIM(commodity), ''), 'UNKNOWN') AS category, 
+          SUM(invoice_amount) AS revenue
         FROM PortRecords
-        WHERE commodity IS NOT NULL AND commodity != ""${f1.clause}
-        GROUP BY commodity
-        ORDER BY value DESC
+        WHERE invoice_amount IS NOT NULL 
+          AND invoice_amount > 0
+          AND COALESCE(NULLIF(TRIM(commodity_group), ''), NULLIF(TRIM(commodity), '')) IS NOT NULL
+          AND UPPER(COALESCE(commodity_group, commodity)) NOT IN (
+            'PILOTAGE',
+            'PORT DUES',
+            'BERTH HIRE',
+            'TOWAGE',
+            'ANCHORAGE',
+            'WHARFAGE',
+            'CARGO SPECIAL SERVICE',
+            'STORAGE',
+            'GROUND RENT',
+            'SHIFTING',
+            'FRESH WATER',
+            'CREW CHANGE',
+            'DEMURRAGE',
+            'HANDLING',
+            'SECURITY',
+            'WEIGHMENT'
+          )
+          ${f1.clause}
+        GROUP BY category
+        ORDER BY revenue DESC
         LIMIT 10
-      `, { type: QueryTypes.SELECT, replacements: f1.replacements });
+      `;
+
+      const commodityData = await sequelize.query(query, { type: QueryTypes.SELECT, replacements: f1.replacements });
 
       const formatted = commodityData.map(c => ({
-        name: c.name,
-        value: parseFloat(c.value) || 0
+        name: c.category,
+        value: parseFloat(c.revenue) || 0
       }));
 
       cache.set(cacheKey, formatted);
