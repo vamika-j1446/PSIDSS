@@ -28,6 +28,7 @@ const simulationController = {
       let baseData = cache.get(baseCacheKey);
 
       if (!baseData) {
+        console.time("simulation-api");
         const conditions = [];
         const replacements = {};
 
@@ -152,6 +153,7 @@ const simulationController = {
         };
 
         cache.set(baseCacheKey, baseData);
+        console.timeEnd("simulation-api");
       }
 
       // Destructure cached base calculations

@@ -33,7 +33,7 @@ const reportController = {
       const forecastScript = path.resolve(__dirname, '..', '..', '..', 'scripts', 'forecast.py');
 
       console.log(`Running ingestion for file: ${filePath}`);
-      
+      console.time("upload-processing");
       // Execute ingest.py
       exec(`"${pythonPath}" "${ingestScript}" "${filePath}"`, async (ingestErr, ingestStdout, ingestStderr) => {
         if (ingestErr) {
@@ -56,6 +56,7 @@ const reportController = {
           }
 
           console.log('Forecast generation success!');
+          console.timeEnd("upload-processing");
           try {
             const { syncPins } = require('../utils/pins');
             await syncPins();

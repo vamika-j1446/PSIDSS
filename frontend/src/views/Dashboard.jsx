@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { 
   DollarSign, Ship, Users, Anchor, Activity, AlertCircle, FileText, 
@@ -12,24 +12,40 @@ export default function Dashboard({ token, selectedYear, user }) {
   const [kpis, setKpis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const fetchingRef = useRef(false);
+
+  const fetchDashboardData = useCallback(async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    setLoading(true);
+    setError('');
+    try {
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      const response = await axios.get(`/api/dashboard/kpis?year=${selectedYear}`, config);
+      console.log('Dashboard API response keys:', Object.keys(response.data || {}));
+      setKpis(response.data);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to fetch dashboard summary metrics.');
+    } finally {
+      setLoading(false);
+      fetchingRef.current = false;
+    }
+  }, [token, selectedYear]);
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      setLoading(true);
-      try {
-        const config = { headers: { Authorization: `Bearer ${token}` } };
-        const response = await axios.get(`/api/dashboard/kpis?year=${selectedYear}`, config);
-        setKpis(response.data);
-      } catch (err) {
-        console.error(err);
-        setError('Failed to fetch dashboard summary metrics.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchDashboardData();
-  }, [token, selectedYear]);
+  }, [fetchDashboardData]);
+
+  // Auto-refresh after Excel upload
+  useEffect(() => {
+    const handler = () => {
+      fetchingRef.current = false;
+      fetchDashboardData();
+    };
+    window.addEventListener('psidss-data-updated', handler);
+    return () => window.removeEventListener('psidss-data-updated', handler);
+  }, [fetchDashboardData]);
 
   if (loading) {
     return (

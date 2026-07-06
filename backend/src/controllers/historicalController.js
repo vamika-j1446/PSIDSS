@@ -24,6 +24,7 @@ const historicalController = {
         return res.json(cached);
       }
 
+      console.time("historical-api");
       const f1_yearly = getYearFilter(req, true, '', false); // ignoreYear = false (respect selected scope)
       const f1_monthly = getYearFilter(req, true, '', false); // ignoreYear = false
       let sqlYearly, sqlMonthly;
@@ -86,8 +87,10 @@ const historicalController = {
       };
 
       cache.set(cacheKey, responseData);
+      console.timeEnd("historical-api");
       res.json(responseData);
     } catch (error) {
+      console.timeEnd("historical-api");
       console.error(error);
       res.status(500).json({ error: 'Failed to retrieve historical revenue trends' });
     }
@@ -110,6 +113,7 @@ const historicalController = {
         return res.json(cached);
       }
 
+      console.time("historical-api");
       const f1 = getYearFilter(req, true); // hasWhereAlready = true
       const f2 = getYearFilter(req, false); // hasWhereAlready = false
 
@@ -137,8 +141,10 @@ const historicalController = {
       });
 
       cache.set(cacheKey, formatted);
+      console.timeEnd("historical-api");
       res.json(formatted);
     } catch (error) {
+      console.timeEnd("historical-api");
       console.error(error);
       res.status(500).json({ error: 'Failed to retrieve customer revenue shares' });
     }
@@ -161,6 +167,7 @@ const historicalController = {
         return res.json(cached);
       }
 
+      console.time("historical-api");
       const f1 = getYearFilter(req, true); // hasWhereAlready = true
 
       const berthData = await sequelize.query(`
@@ -183,8 +190,10 @@ const historicalController = {
       }));
 
       cache.set(cacheKey, formatted);
+      console.timeEnd("historical-api");
       res.json(formatted);
     } catch (error) {
+      console.timeEnd("historical-api");
       console.error(error);
       res.status(500).json({ error: 'Failed to retrieve berth traffic' });
     }
@@ -207,6 +216,7 @@ const historicalController = {
         return res.json(cached);
       }
 
+      console.time("historical-api");
       const f1 = getYearFilter(req, true); // hasWhereAlready = true
 
       const query = `
@@ -245,8 +255,10 @@ const historicalController = {
       }));
 
       cache.set(cacheKey, formatted);
+      console.timeEnd("historical-api");
       res.json(formatted);
     } catch (error) {
+      console.timeEnd("historical-api");
       console.error(error);
       res.status(500).json({ error: 'Failed to retrieve commodity distribution' });
     }
@@ -273,6 +285,7 @@ const historicalController = {
         return res.json(cached);
       }
 
+      console.time("historical-api");
       const f1 = getYearFilter(req, true, '', !!(startDate && endDate)); // ignoreYear = true if startDate and endDate are present
 
       let dateClause = '';
@@ -317,8 +330,10 @@ const historicalController = {
       });
 
       cache.set(cacheKey, formatted);
+      console.timeEnd("historical-api");
       res.json(formatted);
     } catch (error) {
+      console.timeEnd("historical-api");
       console.error(error);
       res.status(500).json({ error: 'Failed to retrieve Gantt data' });
     }

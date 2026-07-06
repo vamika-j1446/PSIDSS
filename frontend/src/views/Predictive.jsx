@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -15,23 +15,38 @@ export default function Predictive({ token, selectedYear, activeTab }) {
   const [expandedDetails, setExpandedDetails] = useState({});
   const [showAllCustomers, setShowAllCustomers] = useState(false);
   const [showAllCommodities, setShowAllCommodities] = useState(false);
+  const fetchingRef = useRef(false);
+
+  const fetchForecasts = useCallback(async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    try {
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      const response = await axios.get(`/api/predictive/forecasts?year=${selectedYear}`, config);
+      console.log('Predictive API response keys:', Object.keys(response.data || {}));
+      setData(response.data);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to fetch forecasting data.');
+    } finally {
+      setLoading(false);
+      fetchingRef.current = false;
+    }
+  }, [token, selectedYear]);
 
   useEffect(() => {
-    const fetchForecasts = async () => {
-      try {
-        const config = { headers: { Authorization: `Bearer ${token}` } };
-        const response = await axios.get(`/api/predictive/forecasts?year=${selectedYear}`, config);
-        setData(response.data);
-      } catch (err) {
-        console.error(err);
-        setError('Failed to fetch forecasting data.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchForecasts();
-  }, [token, selectedYear]);
+  }, [fetchForecasts]);
+
+  // Auto-refresh after Excel upload
+  useEffect(() => {
+    const handler = () => {
+      fetchingRef.current = false;
+      fetchForecasts();
+    };
+    window.addEventListener('psidss-data-updated', handler);
+    return () => window.removeEventListener('psidss-data-updated', handler);
+  }, [fetchForecasts]);
 
   const toggleDetails = (index) => {
     setExpandedDetails(prev => ({

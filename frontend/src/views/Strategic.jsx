@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { ShieldAlert, TrendingDown, TrendingUp, AlertTriangle, AlertCircle, CheckCircle, Info } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
@@ -8,23 +8,38 @@ export default function Strategic({ token, selectedYear, activeTab }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState('granular'); // 'granular' or 'group'
+  const fetchingRef = useRef(false);
+
+  const fetchStrategicData = useCallback(async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    try {
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      const response = await axios.get(`/api/strategic/analysis?year=${selectedYear}`, config);
+      console.log('Strategic API response keys:', Object.keys(response.data || {}));
+      setData(response.data);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to fetch strategic analysis.');
+    } finally {
+      setLoading(false);
+      fetchingRef.current = false;
+    }
+  }, [token, selectedYear]);
 
   useEffect(() => {
-    const fetchStrategicData = async () => {
-      try {
-        const config = { headers: { Authorization: `Bearer ${token}` } };
-        const response = await axios.get(`/api/strategic/analysis?year=${selectedYear}`, config);
-        setData(response.data);
-      } catch (err) {
-        console.error(err);
-        setError('Failed to fetch strategic analysis.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchStrategicData();
-  }, [token, selectedYear]);
+  }, [fetchStrategicData]);
+
+  // Auto-refresh after Excel upload
+  useEffect(() => {
+    const handler = () => {
+      fetchingRef.current = false;
+      fetchStrategicData();
+    };
+    window.addEventListener('psidss-data-updated', handler);
+    return () => window.removeEventListener('psidss-data-updated', handler);
+  }, [fetchStrategicData]);
 
   if (loading) {
     return (

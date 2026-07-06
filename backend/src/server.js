@@ -414,6 +414,20 @@ async function startServer() {
     await sequelize.sync();
     console.log('Database synchronized successfully.');
 
+    // Create database indexes on PortRecords if they don't already exist
+    try {
+      console.log('Verifying SQLite indexes...');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_port_source_year ON PortRecords(source_year);');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_port_invoice_date ON PortRecords(invoice_date);');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_port_berth ON PortRecords(berth);');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_port_party ON PortRecords(party_name);');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_port_commodity_group ON PortRecords(commodity_group);');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_port_commodity ON PortRecords(commodity);');
+      console.log('SQLite indexes verified successfully.');
+    } catch (indexErr) {
+      console.error('Error creating database indexes:', indexErr);
+    }
+
     await backfillSourceYear();
 
     await verifyDatabaseData();

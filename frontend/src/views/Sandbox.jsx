@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
@@ -19,37 +19,55 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
   // Local drilldown scope for Berth: Default to "All Berths"
   const [localBerth, setLocalBerth] = useState('All Berths');
   const [berthList, setBerthList] = useState(['All Berths']);
+  const fetchingRef = useRef(false);
 
-  // Run simulation only when berth, year or token changes (not on tariffPercent changes)
-  useEffect(() => {
-    const runSimulation = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const config = { headers: { Authorization: `Bearer ${token}` } };
-        const response = await axios.post('/api/simulation/run', {
-          selectedBerth: localBerth,
-          yearScope: selectedYear,
-          tariffPercent: 0 // Query with base baseline tariff percentage
-        }, config);
-        setSimulationData(response.data);
-        if (response.data && response.data.projection) {
-          setHistoricalSeries(response.data.projection);
-        }
-      } catch (err) {
-        console.error(err);
-        setError('Failed to run simulation. Ensure your account has Analyst/Admin permissions.');
-      } finally {
-        setLoading(false);
+  const runSimulation = useCallback(async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    setLoading(true);
+    setError('');
+    try {
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      const response = await axios.post('/api/simulation/run', {
+        selectedBerth: localBerth,
+        yearScope: selectedYear,
+        tariffPercent: 0 // Always fetch base baseline - tariff is applied client-side
+      }, config);
+      console.log('Simulation API response keys:', Object.keys(response.data || {}));
+      setSimulationData(response.data);
+      if (response.data && response.data.projection && response.data.projection.length > 0) {
+        console.log('Simulation projection sample:', response.data.projection[0]);
+        setHistoricalSeries(response.data.projection);
+      } else {
+        console.warn('Simulation returned empty projection data:', response.data);
+        setHistoricalSeries([]);
       }
-    };
+    } catch (err) {
+      console.error(err);
+      setError('Failed to run simulation. Ensure your account has Analyst/Admin permissions.');
+    } finally {
+      setLoading(false);
+      fetchingRef.current = false;
+    }
+  }, [token, selectedYear, localBerth]);
 
+  // Run simulation when berth, year, or token changes (not on tariffPercent changes)
+  useEffect(() => {
     const delayDebounce = setTimeout(() => {
       runSimulation();
     }, 250);
-
     return () => clearTimeout(delayDebounce);
-  }, [token, selectedYear, localBerth]);
+  }, [runSimulation]);
+
+  // Auto-refresh after Excel upload
+  useEffect(() => {
+    const handler = () => {
+      fetchingRef.current = false;
+      runSimulation();
+    };
+    window.addEventListener('psidss-data-updated', handler);
+    return () => window.removeEventListener('psidss-data-updated', handler);
+  }, [runSimulation]);
 
   // Synchronize dropdown options with backend berths array
   useEffect(() => {
@@ -77,18 +95,23 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
   const pctChange = tariffPercent;
 
   // Recalculate projectionData dynamically using useMemo when tariffPercent changes
-  const projectionData = React.useMemo(() => {
+  const projectionData = useMemo(() => {
     const multiplier = 1 + Number(tariffPercent || 0) / 100;
-    return historicalSeries.map((row) => {
-      const base = Number(row.historicalRevenue ?? row.baseRevenue ?? row.revenue ?? 0);
+    const result = historicalSeries.map((row) => {
+      // Accept multiple possible key names from backend
+      const base = Number(
+        row.historicalRevenue ?? row.baseRevenue ?? row.revenue ?? 0
+      );
       return {
-        ...row,
-        period: row.period || row.year || row.month,
+        year: row.year || row.period || row.source_year || 0,
+        period: row.period || row.year || row.source_year || '',
         historicalRevenue: base,
-        simulatedRevenue: base * multiplier,
-        revenueDelta: base * (Number(tariffPercent || 0) / 100),
+        simulatedRevenue: parseFloat((base * multiplier).toFixed(2)),
+        revenueDelta: parseFloat((base * (Number(tariffPercent || 0) / 100)).toFixed(2)),
       };
     });
+    console.log('projectionData computed, length:', result.length, 'tariffPercent:', tariffPercent, result[0]);
+    return result;
   }, [historicalSeries, tariffPercent]);
 
   const getDiagnosticMessage = () => {

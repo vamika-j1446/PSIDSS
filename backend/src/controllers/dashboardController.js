@@ -22,6 +22,7 @@ const dashboardController = {
         return res.json(cached);
       }
 
+      console.time("dashboard-api");
       // ---------------------------------------------------------
       // LOCAL YEAR FILTER FIX
       // Do NOT use old getYearFilter here.
@@ -585,8 +586,10 @@ const dashboardController = {
 
       cache.set(cacheKey, responseData);
 
+      console.timeEnd("dashboard-api");
       res.json(responseData);
     } catch (error) {
+      console.timeEnd("dashboard-api");
       console.error('[DASHBOARD KPI ERROR]', error);
       res.status(500).json({
         error: 'Failed to retrieve dashboard KPIs',

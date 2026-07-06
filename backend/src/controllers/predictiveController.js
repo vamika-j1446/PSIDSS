@@ -12,6 +12,7 @@ const predictiveController = {
         return res.json(cached);
       }
 
+      console.time("predictive-api");
       // Fetch all forecasts
       const forecasts = await Forecast.findAll({
         order: [['forecast_date', 'ASC']]
@@ -322,8 +323,10 @@ const predictiveController = {
       };
 
       cache.set(cacheKey, responseData);
+      console.timeEnd("predictive-api");
       res.json(responseData);
     } catch (error) {
+      console.timeEnd("predictive-api");
       console.error(error);
       res.status(500).json({ error: 'Failed to retrieve predictive insights' });
     }

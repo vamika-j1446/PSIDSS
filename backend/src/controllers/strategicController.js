@@ -198,6 +198,7 @@ const strategicController = {
         return res.json(cached);
       }
 
+      console.time("strategic-api");
       const f1 = getYearFilter(req, true); // hasWhereAlready = true
       const f2 = getYearFilter(req, false); // hasWhereAlready = false
 
@@ -594,8 +595,10 @@ const strategicController = {
       };
 
       cache.set(cacheKey, responseData);
+      console.timeEnd("strategic-api");
       res.json(responseData);
     } catch (error) {
+      console.timeEnd("strategic-api");
       console.error(error);
       res.status(500).json({ error: 'Failed to retrieve strategic analysis data' });
     }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -17,43 +17,61 @@ export default function Historical({ token, selectedYear, activeTab }) {
   const [error, setError] = useState('');
   const [yearFilterRange, setYearFilterRange] = useState([2016, 2025]);
   const [selectedBerth, setSelectedBerth] = useState('All');
+  const fetchingRef = useRef(false);
 
-  useEffect(() => {
-    setSelectedBerth('All');
-    fetchHistoricalData();
-  }, [token, selectedYear]);
-
-  const fetchHistoricalData = async () => {
+  const fetchHistoricalData = useCallback(async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
     setLoading(true);
     setError('');
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } };
-      const [trendsRes, custRes, berthRes, commRes] = await Promise.all([
+      // Use Promise.allSettled so a single slow/failed API does not block all charts
+      const [trendsRes, custRes, berthRes, commRes] = await Promise.allSettled([
         axios.get(`/api/historical/trends?year=${selectedYear}`, config),
         axios.get(`/api/historical/customers?year=${selectedYear}`, config),
         axios.get(`/api/historical/berths?year=${selectedYear}`, config),
         axios.get(`/api/historical/commodities?year=${selectedYear}`, config)
       ]);
-      
-      setTrends(trendsRes.data);
-      setCustomers(custRes.data);
-      setBerths(berthRes.data);
-      setCommodities(commRes.data);
-      
-      // Calculate min and max years dynamically
-      if (trendsRes.data.yearly.length > 0) {
-        const years = trendsRes.data.yearly.map(t => parseInt(t.year)).filter(y => !isNaN(y));
-        if (years.length > 0) {
-          setYearFilterRange([Math.min(...years), Math.max(...years)]);
+
+      if (trendsRes.status === 'fulfilled') {
+        const d = trendsRes.value.data;
+        console.log('Historical trends API response:', d);
+        setTrends(d || { yearly: [], monthly: [] });
+        const yrList = (d?.yearly || []).map(t => parseInt(t.year)).filter(y => !isNaN(y));
+        if (yrList.length > 0) {
+          setYearFilterRange([Math.min(...yrList), Math.max(...yrList)]);
         }
       }
+      if (custRes.status === 'fulfilled') setCustomers(custRes.value.data || []);
+      if (berthRes.status === 'fulfilled') setBerths(berthRes.value.data || []);
+      if (commRes.status === 'fulfilled') setCommodities(commRes.value.data || []);
+
+      const anyFailed = [trendsRes, custRes, berthRes, commRes].some(r => r.status === 'rejected');
+      if (anyFailed) setError('Some data sections could not be loaded.');
     } catch (err) {
       console.error(err);
       setError('Failed to fetch historical analytics data.');
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
-  };
+  }, [token, selectedYear]);
+
+  useEffect(() => {
+    setSelectedBerth('All');
+    fetchHistoricalData();
+  }, [fetchHistoricalData]);
+
+  // Auto-refresh after Excel upload
+  useEffect(() => {
+    const handler = () => {
+      fetchingRef.current = false;
+      fetchHistoricalData();
+    };
+    window.addEventListener('psidss-data-updated', handler);
+    return () => window.removeEventListener('psidss-data-updated', handler);
+  }, [fetchHistoricalData]);
 
   if (loading) {
     return (

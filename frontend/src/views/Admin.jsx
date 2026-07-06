@@ -113,6 +113,8 @@ export default function Admin({ token, user }) {
       setSuccess(response.data.message);
       fetchReports();
       fetchPins();
+      // Notify all pages to refresh their charts
+      window.dispatchEvent(new Event('psidss-data-updated'));
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || 'Upload failed. Check file structure and size.');
@@ -136,6 +138,8 @@ export default function Admin({ token, user }) {
       setSuccess(response.data.message);
       fetchReports();
       fetchPins();
+      // Notify all pages to refresh their charts
+      window.dispatchEvent(new Event('psidss-data-updated'));
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || 'Deletion failed.');
@@ -151,6 +155,8 @@ export default function Admin({ token, user }) {
       const config = { headers: { Authorization: `Bearer ${token}` } };
       const response = await axios.post('/api/reports/regenerate-forecasts', {}, config);
       setSuccess(response.data.message);
+      // Notify all pages to refresh forecasts
+      window.dispatchEvent(new Event('psidss-data-updated'));
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || 'Forecasting regeneration failed.');
