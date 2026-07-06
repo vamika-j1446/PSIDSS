@@ -213,7 +213,7 @@ export default function Dashboard({ token, selectedYear, user }) {
                 </div>
 
                 <div class="p-4 bg-slate-950/45 border border-slate-900 rounded-xl space-y-1.5 hover:border-slate-800 transition-all">
-                  <span class="text-[9px] uppercase tracking-wider font-extrabold text-violet-400">Highest Revenue Charge</span>
+                  <span class="text-[9px] uppercase tracking-wider font-extrabold text-violet-400">Highest Revenue Cargo Category</span>
                   <p class="text-slate-200 text-xs font-semibold">
                     The single most profitable charge category is <strong class="text-white font-extrabold">{kpis?.topCommodity}</strong>.
                   </p>
@@ -221,7 +221,7 @@ export default function Dashboard({ token, selectedYear, user }) {
 
                 <div class="p-4 bg-slate-950/45 border border-slate-900 rounded-xl space-y-1.5 hover:border-slate-800 transition-all">
                   <span class="text-[9px] uppercase tracking-wider font-extrabold text-amber-400">Highest Revenue Customer</span>
-                  <p class="text-slate-200 text-xs font-semibold leading-normal truncate" title={kpis?.topCustomer}>
+                  <p class="text-slate-200 text-xs font-semibold leading-normal" title={kpis?.topCustomer}>
                     Top billing partner: <strong class="text-white font-extrabold">{kpis?.topCustomer}</strong>.
                   </p>
                 </div>
@@ -237,7 +237,7 @@ export default function Dashboard({ token, selectedYear, user }) {
                 </div>
 
                 <div class="p-4 bg-slate-950/45 border border-slate-900 rounded-xl space-y-1.5 hover:border-slate-800 transition-all">
-                  <span class="text-[9px] uppercase tracking-wider font-extrabold text-emerald-400">Fastest Growing Charge</span>
+                  <span class="text-[9px] uppercase tracking-wider font-extrabold text-emerald-400">Fastest Growing Cargo Category</span>
                   <p class="text-slate-200 text-xs font-semibold leading-relaxed">
                     Highest YoY demand: <strong class="text-emerald-400">{kpis?.fastestGrowingCommodity}</strong>.
                   </p>
@@ -245,7 +245,7 @@ export default function Dashboard({ token, selectedYear, user }) {
 
                 <div class="p-4 bg-slate-950/45 border border-slate-900 rounded-xl space-y-1.5 hover:border-slate-800 transition-all">
                   <span class="text-[9px] uppercase tracking-wider font-extrabold text-rose-500">Largest Business Risk</span>
-                  <p class="text-slate-200 text-xs font-semibold truncate" title={kpis?.largestBusinessRisk}>
+                  <p class="text-slate-200 text-xs font-semibold" title={kpis?.largestBusinessRisk}>
                     Primary exposure: <strong class="text-rose-400">{kpis?.largestBusinessRisk}</strong>.
                   </p>
                 </div>
@@ -253,41 +253,6 @@ export default function Dashboard({ token, selectedYear, user }) {
 
             </div>
           </div>
-
-          {/* Yearly Revenue Trajectory Chart */}
-          {kpis?.yearlyTrend && kpis.yearlyTrend.length > 0 && (
-            <div class="p-8 rounded-2xl glass-panel space-y-6 glow-violet border border-slate-900">
-              <div>
-                <h4 class="text-lg font-bold text-white tracking-tight">Yearly Revenue Trajectory</h4>
-                <p class="text-xs text-slate-500 mt-1">Answers: What is the port's overall yearly revenue trend?</p>
-              </div>
-              <div class="h-64 text-xs">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={kpis.yearlyTrend} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2}/>
-                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                    <XAxis dataKey="year" stroke="#64748b" tickFormatter={(v) => {
-                      const y = parseInt(v);
-                      if (isNaN(y)) return v;
-                      return `FY ${y}–${String(y + 1).slice(2)}`;
-                    }} />
-                    <YAxis stroke="#64748b" tickFormatter={(v) => `₹${(v / 1.0e9).toFixed(1)}B`} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
-                      itemStyle={{ color: '#fff' }}
-                      formatter={(v) => [formatCurrency(v), 'Revenue']}
-                    />
-                    <Area type="monotone" dataKey="revenue" stroke="#8b5cf6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRev)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
 
         </div>
 

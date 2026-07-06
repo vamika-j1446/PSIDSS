@@ -236,7 +236,9 @@ export default function Chatbot({ token, selectedYear, pageContext }) {
                          cleanMsg.includes('growing') || cleanMsg.includes('decreasing') || 
                          cleanMsg.includes('concentration') || cleanMsg.includes('dependent') ||
                          cleanMsg.includes('how much') || cleanMsg.includes('highest') ||
-                         cleanMsg.includes('who is') || cleanMsg.includes('which');
+                         cleanMsg.includes('who is') || cleanMsg.includes('which') ||
+                         cleanMsg.includes('vessel') || cleanMsg.includes('arrival') ||
+                         cleanMsg.includes('ship');
     
     setThinkingText(isSqlKeyword ? "Checking records..." : "Thinking...");
     setLoading(true);

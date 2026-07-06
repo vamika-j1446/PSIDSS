@@ -417,16 +417,23 @@ const chatbotController = {
               const isConcentration = cleanMsg.includes('customer concentration') || cleanMsg.includes('dependent on few customer') || cleanMsg.includes('revenue dependent on few') || cleanMsg.includes('explain customer concentration');
               const isSim = cleanMsg.includes('tariff simulation') || cleanMsg.includes('tariff increases by') || cleanMsg.includes('simulation work') || cleanMsg.includes('simulate tariff');
               const isRevenue = cleanMsg.includes('revenue') || cleanMsg.includes('billing receipts') || cleanMsg.includes('invoice amount') || cleanMsg.includes('earnings') || cleanMsg.includes('income');
+              const isVessels = cleanMsg.includes('vessel') || cleanMsg.includes('arrival') || cleanMsg.includes('how many ships') || cleanMsg.includes('number of ships') || cleanMsg.includes('total ships') || cleanMsg.includes('ship arrivals') || cleanMsg.includes('vessel count');
 
               // Build SQL filters
               const conditions = [];
               const replacements = {};
 
-              if (yearScope && yearScope !== 'All' && yearScope !== 'All Fiscal Years' && yearScope !== 'all') {
-                if (yearScope === 'Recent4') {
+              let currentYearScope = yearScope;
+              const msgYears = cleanMsg.match(/\b20\d{2}\b/g);
+              if (msgYears && msgYears.length === 1 && !isCagrCalculation) {
+                currentYearScope = msgYears[0];
+              }
+
+              if (currentYearScope && currentYearScope !== 'All' && currentYearScope !== 'All Fiscal Years' && currentYearScope !== 'all') {
+                if (currentYearScope === 'Recent4') {
                   conditions.push('source_year BETWEEN 2021 AND 2024');
                 } else {
-                  const numYear = parseInt(yearScope, 10);
+                  const numYear = parseInt(currentYearScope, 10);
                   if (!isNaN(numYear)) {
                     conditions.push('source_year = :yearScope');
                     replacements.yearScope = numYear;
@@ -445,9 +452,10 @@ const chatbotController = {
               }
 
               const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+              const formattedPeriod = currentYearScope === 'Recent4' ? 'FY 2021–22 to FY 2024–25' : (currentYearScope === 'All' || !currentYearScope) ? 'All Fiscal Years' : `FY ${currentYearScope}–${parseInt(currentYearScope)%100+1}`;
 
               if (isTopCust) {
-                const cacheKey = `chatbot_top_customer_${yearScope}_${userKey}`;
+                const cacheKey = `chatbot_top_customer_${currentYearScope}_${userKey}`;
                 const cached = getCached(cacheKey);
                 if (cached) {
                   answer = cached;
@@ -472,16 +480,16 @@ const chatbotController = {
                     const custRev = parseFloat(result[0].revenue) || 0;
                     const totalRev = parseFloat(totalResult[0].total) || 1.0;
                     const share = (custRev / totalRev) * 100;
-                    answer = `The top customer is ${custName}, contributing ${formatCurrencyMsg(custRev)}. This represents about ${share.toFixed(2)}% of total revenue for the selected period, so it is one of the port’s most important billing partners. This is based on Cochin Port uploaded financial records.`;
+                    answer = `The top customer is ${custName}, contributing ${formatCurrencyMsg(custRev)}. This represents about ${share.toFixed(2)}% of total revenue for the selected period (${formattedPeriod}), so it is one of the port’s most important billing partners. This is based on Cochin Port uploaded financial records.`;
                   } else {
-                    answer = "No customer revenue records found for the selected scope.";
+                    answer = `No customer revenue records found for the selected scope (${formattedPeriod}).`;
                   }
                   setCached(cacheKey, answer);
                 }
                 type = "top_customer";
                 source = "database";
               } else if (isTopBerth) {
-                const cacheKey = `chatbot_top_berth_${yearScope}_${userKey}`;
+                const cacheKey = `chatbot_top_berth_${currentYearScope}_${userKey}`;
                 const cached = getCached(cacheKey);
                 if (cached) {
                   answer = cached;
@@ -498,16 +506,16 @@ const chatbotController = {
                   if (result.length > 0) {
                     const berth = result[0].berth;
                     const rev = parseFloat(result[0].revenue) || 0;
-                    answer = `The highest revenue-generating berth is Berth ${berth} with ${formatCurrencyMsg(rev)} in revenue for the selected period. This means Berth ${berth} is a major revenue contributor and tariff or operational decisions related to this berth can have a strong financial impact. This is based on Cochin Port uploaded financial records.`;
+                    answer = `The highest revenue-generating berth is Berth ${berth} with ${formatCurrencyMsg(rev)} in revenue for the selected period (${formattedPeriod}). This means Berth ${berth} is a major revenue contributor and tariff or operational decisions related to this berth can have a strong financial impact. This is based on Cochin Port uploaded financial records.`;
                   } else {
-                    answer = "No berth revenue records found for the selected scope.";
+                    answer = `No berth revenue records found for the selected scope (${formattedPeriod}).`;
                   }
                   setCached(cacheKey, answer);
                 }
                 type = "top_berth";
                 source = "database";
               } else if (isTrend) {
-                const cacheKey = `chatbot_revenue_trend_${yearScope}_${userKey}`;
+                const cacheKey = `chatbot_revenue_trend_${currentYearScope}_${userKey}`;
                 const cached = getCached(cacheKey);
                 if (cached) {
                   answer = cached;
@@ -542,16 +550,16 @@ const chatbotController = {
 
                     answer = `${directAnswer} ${evidence} ${interpretation} based on uploaded financial records.`;
                   } else if (result.length === 1) {
-                    answer = `The revenue for the selected scope is ${formatCurrencyMsg(result[0].revenue)}. A multi-year comparison is required to show a trend.`;
+                    answer = `The revenue for the selected scope (${formattedPeriod}) is ${formatCurrencyMsg(result[0].revenue)}. A multi-year comparison is required to show a trend.`;
                   } else {
-                    answer = "No revenue records were found for the selected scope.";
+                    answer = `No revenue records were found for the selected scope (${formattedPeriod}).`;
                   }
                   setCached(cacheKey, answer);
                 }
                 type = "yearly_trend";
                 source = "database";
               } else if (isCommodity) {
-                const cacheKey = `chatbot_top_commodity_${yearScope}_${userKey}`;
+                const cacheKey = `chatbot_top_commodity_${currentYearScope}_${userKey}`;
                 const cached = getCached(cacheKey);
                 if (cached) {
                   answer = cached;
@@ -570,16 +578,16 @@ const chatbotController = {
                   if (result.length > 0) {
                     const name = result[0].name;
                     const rev = parseFloat(result[0].revenue) || 0;
-                    answer = `The top cargo category is '${name}', contributing a total revenue of ${formatCurrencyMsg(rev)} for the selected period. This indicates that '${name}' cargo handling constitutes a major volume and billing line for the port. This is based on Cochin Port uploaded financial records.`;
+                    answer = `The top cargo category is '${name}', contributing a total revenue of ${formatCurrencyMsg(rev)} for the selected period (${formattedPeriod}). This indicates that '${name}' cargo handling constitutes a major volume and billing line for the port. This is based on Cochin Port uploaded financial records.`;
                   } else {
-                    answer = "No commodity cargo records found for the selected scope.";
+                    answer = `No commodity cargo records found for the selected scope (${formattedPeriod}).`;
                   }
                   setCached(cacheKey, answer);
                 }
                 type = "top_commodity";
                 source = "database";
               } else if (isConcentration) {
-                const cacheKey = `chatbot_concentration_${yearScope}_${userKey}`;
+                const cacheKey = `chatbot_concentration_${currentYearScope}_${userKey}`;
                 const cached = getCached(cacheKey);
                 if (cached) {
                   answer = cached;
@@ -606,9 +614,9 @@ const chatbotController = {
                       severity = 'moderate customer concentration risk';
                     }
 
-                    answer = `Based on the uploaded Cochin Port billing records, the top customer represents ${top1Share.toFixed(2)}% of total revenue, and the top 5 customers represent ${top5Share.toFixed(2)}%. This indicates a ${severity}.`;
+                    answer = `Based on the uploaded Cochin Port billing records, the top customer represents ${top1Share.toFixed(2)}% of total revenue, and the top 5 customers represent ${top5Share.toFixed(2)}% for the period ${formattedPeriod}. This indicates a ${severity}.`;
                   } else {
-                    answer = "No customer billing records available to calculate concentration.";
+                    answer = `No customer billing records available to calculate concentration for ${formattedPeriod}.`;
                   }
                   setCached(cacheKey, answer);
                 }
@@ -619,7 +627,7 @@ const chatbotController = {
                 type = "tariff_simulation";
                 source = "system";
               } else if (isRevenue) {
-                const cacheKey = `chatbot_total_revenue_${yearScope}_${userKey}`;
+                const cacheKey = `chatbot_total_revenue_${currentYearScope}_${userKey}`;
                 const cached = getCached(cacheKey);
                 if (cached) {
                   answer = cached;
@@ -632,10 +640,30 @@ const chatbotController = {
 
                   const rev = parseFloat(result[0].totalRevenue) || 0;
                   const formattedRev = rev > 0 ? formatCurrencyMsg(rev) : "No revenue records were found for the selected scope.";
-                  answer = `Total Port Revenue is the total billing amount generated from all uploaded port financial records. It is calculated as SUM(invoice_amount) from the PortRecords table. For the selected period (${yearScope === 'Recent4' ? 'FY 2021–22 to FY 2024–25' : yearScope === 'All' ? 'All Fiscal Years' : `FY ${yearScope}–${parseInt(yearScope)%100+1}`}), total revenue is ${formattedRev}. This is a financial billing metric, not cargo volume or profit.`;
+                  answer = `Total Port Revenue is the total billing amount generated from all uploaded port financial records. It is calculated as SUM(invoice_amount) from the PortRecords table. For the selected period (${formattedPeriod}), total revenue is ${formattedRev}. This is a financial billing metric, not cargo volume or profit.`;
                   setCached(cacheKey, answer);
                 }
                 type = "revenue_explanation";
+                source = "database";
+              } else if (isVessels) {
+                const cacheKey = `chatbot_vessels_${currentYearScope}_${userKey}`;
+                const cached = getCached(cacheKey);
+                if (cached) {
+                  answer = cached;
+                } else {
+                  const result = await sequelize.query(`
+                    SELECT COUNT(DISTINCT vessel_name) AS totalVessels
+                    FROM PortRecords
+                    WHERE vessel_name IS NOT NULL
+                    AND TRIM(vessel_name) != ''
+                    ${conditions.length ? `AND ${conditions.join(' AND ')}` : ''}
+                  `, { type: QueryTypes.SELECT, replacements });
+
+                  const count = parseInt(result[0].totalVessels, 10) || 0;
+                  answer = `The total number of distinct vessel arrivals for the selected period (${formattedPeriod}) is ${count.toLocaleString('en-IN')}. This represents the unique ships that docked at Cochin Port for billing services. This is based on uploaded financial records.`;
+                  setCached(cacheKey, answer);
+                }
+                type = "vessels_count";
                 source = "database";
               } else {
                 // F. Standard Safe Fallback Message
