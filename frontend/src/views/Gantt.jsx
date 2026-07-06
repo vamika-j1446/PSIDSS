@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Anchor, Calendar, Info, AlertCircle, HelpCircle } from 'lucide-react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 export default function Gantt({ token }) {
   const [vessels, setVessels] = useState([]);
@@ -8,11 +10,11 @@ export default function Gantt({ token }) {
   const [error, setError] = useState('');
   const [validationError, setValidationError] = useState('');
 
-  // Input states for calendar selectors
-  const [inputStartDate, setInputStartDate] = useState('');
-  const [inputEndDate, setInputEndDate] = useState('');
+  // Input states for calendar selectors (Date objects)
+  const [inputStartDate, setInputStartDate] = useState(null);
+  const [inputEndDate, setInputEndDate] = useState(null);
 
-  // Applied date filters used for rendering the timeline
+  // Applied date filters used for rendering the timeline (string formatted yyyy-MM-dd)
   const [startDateStr, setStartDateStr] = useState('');
   const [endDateStr, setEndDateStr] = useState('');
 
@@ -44,12 +46,20 @@ export default function Gantt({ token }) {
     return !isNaN(d.getTime());
   };
 
+  const formatDateString = (date) => {
+    if (!date) return '';
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
   const fetchGanttData = async (start = '', end = '') => {
     setLoading(true);
     setError('');
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } };
-      let url = `/api/historical/gantt`;
+      let url = `/api/berth-timeline`;
       if (start && end) {
         url += `?startDate=${start}&endDate=${end}`;
       }
@@ -59,12 +69,10 @@ export default function Gantt({ token }) {
 
       if (!start || !end) {
         if (data.length > 0) {
-          // Sort arrival dates
           const dates = data.map(v => parseVesselDate(v.ata)).filter(Boolean).sort((a, b) => a - b);
           const minDate = dates[0] || new Date();
           const maxDate = dates[dates.length - 1] || new Date();
           
-          // Default: show the first 30 days of data, or the full available range
           const defaultStart = minDate;
           const defaultEnd = new Date(minDate.getTime() + 30 * 24 * 60 * 60 * 1000) < maxDate 
             ? new Date(minDate.getTime() + 30 * 24 * 60 * 60 * 1000) 
@@ -74,13 +82,13 @@ export default function Gantt({ token }) {
           const eStr = defaultEnd.toISOString().split('T')[0];
           setStartDateStr(sStr);
           setEndDateStr(eStr);
-          setInputStartDate(sStr);
-          setInputEndDate(eStr);
+          setInputStartDate(parseLocalDate(sStr));
+          setInputEndDate(parseLocalDate(eStr));
         } else {
           setStartDateStr('');
           setEndDateStr('');
-          setInputStartDate('');
-          setInputEndDate('');
+          setInputStartDate(null);
+          setInputEndDate(null);
         }
       }
     } catch (err) {
@@ -95,31 +103,25 @@ export default function Gantt({ token }) {
     fetchGanttData();
   }, [token]);
 
-  const handleApplyFilter = () => {
-    setValidationError('');
-    if (!isValidDate(inputStartDate) || !isValidDate(inputEndDate)) {
-      setValidationError("Please select valid start and end dates.");
-      return;
-    }
-    const start = new Date(inputStartDate);
-    const end = new Date(inputEndDate);
-    if (end < start) {
-      setValidationError("End Date cannot be earlier than Start Date.");
-      return;
-    }
-    setStartDateStr(inputStartDate);
-    setEndDateStr(inputEndDate);
-    fetchGanttData(inputStartDate, inputEndDate);
-  };
+  // Automatic filter reload on date picker change
+  useEffect(() => {
+    if (!inputStartDate || !inputEndDate) return;
 
-  const resetFilters = () => {
-    setInputStartDate('');
-    setInputEndDate('');
-    setStartDateStr('');
-    setEndDateStr('');
+    if (inputEndDate < inputStartDate) {
+      setValidationError("End date cannot be earlier than start date.");
+      return;
+    }
     setValidationError('');
-    fetchGanttData();
-  };
+
+    const startStr = formatDateString(inputStartDate);
+    const endStr = formatDateString(inputEndDate);
+
+    if (startStr !== startDateStr || endStr !== endDateStr) {
+      setStartDateStr(startStr);
+      setEndDateStr(endStr);
+      fetchGanttData(startStr, endStr);
+    }
+  }, [inputStartDate, inputEndDate]);
 
   const hasValidRange = isValidDate(startDateStr) && isValidDate(endDateStr);
   const timelineStart = hasValidRange ? parseLocalDate(startDateStr) : null;
@@ -230,57 +232,47 @@ export default function Gantt({ token }) {
 
   return (
     <div class="space-y-8 animate-fade-in pb-12">
-      {/* Header & Local Filters */}
-      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      {/* Header & Local Inline Date Selectors */}
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-900 pb-5">
         <div>
           <h2 class="text-3xl font-extrabold text-white tracking-tight">Berth Timeline (Gantt)</h2>
           <p class="text-slate-400 text-sm mt-1">Real-time terminal lane occupancy tracking, overlaps, and turnaround audits.</p>
         </div>
 
-        <div class="flex flex-col gap-2 bg-slate-900/40 p-4 rounded-xl border border-slate-800/60 w-fit">
-          <div class="flex flex-wrap items-center gap-4">
+        <div class="flex flex-col gap-1.5 self-start md:self-center">
+          <div class="flex items-center gap-4 text-xs font-semibold text-slate-300">
             {/* Start Date picker */}
-            <div class="flex flex-col">
-              <span class="text-[9px] text-slate-500 font-bold uppercase mb-1">Start Date</span>
-              <input 
-                type="date" 
-                value={inputStartDate} 
-                onChange={(e) => setInputStartDate(e.target.value)}
-                class="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+            <div class="flex items-center gap-2">
+              <span class="text-slate-500 uppercase tracking-wider text-[10px]">Start Date:</span>
+              <DatePicker 
+                selected={inputStartDate} 
+                onChange={(date) => setInputStartDate(date)}
+                showMonthDropdown
+                showYearDropdown
+                dropdownMode="select"
+                dateFormat="dd-MM-yyyy"
+                className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500 cursor-pointer w-28"
               />
             </div>
 
             {/* End Date picker */}
-            <div class="flex flex-col">
-              <span class="text-[9px] text-slate-500 font-bold uppercase mb-1">End Date</span>
-              <input 
-                type="date" 
-                value={inputEndDate} 
-                onChange={(e) => setInputEndDate(e.target.value)}
-                class="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+            <div class="flex items-center gap-2">
+              <span class="text-slate-500 uppercase tracking-wider text-[10px]">End Date:</span>
+              <DatePicker 
+                selected={inputEndDate} 
+                onChange={(date) => setInputEndDate(date)}
+                showMonthDropdown
+                showYearDropdown
+                dropdownMode="select"
+                dateFormat="dd-MM-yyyy"
+                className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500 cursor-pointer w-28"
               />
             </div>
-
-            {/* Apply Filter Button */}
-            <button
-              onClick={handleApplyFilter}
-              class="bg-blue-600 hover:bg-blue-500 text-white border border-blue-500 hover:border-blue-400 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none self-end cursor-pointer shadow-lg shadow-blue-500/20"
-            >
-              Apply Filter
-            </button>
-
-            {/* Reset Filter Button */}
-            <button
-              onClick={resetFilters}
-              class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none self-end cursor-pointer"
-            >
-              Reset
-            </button>
           </div>
 
           {/* Validation Error Banner */}
           {validationError && (
-            <div class="text-rose-400 text-[10px] font-semibold flex items-center gap-1.5 mt-1">
+            <div class="text-rose-400 text-[10px] font-semibold flex items-center gap-1.5 self-end">
               <AlertCircle class="h-3.5 w-3.5 shrink-0" />
               <span>{validationError}</span>
             </div>

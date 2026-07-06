@@ -84,6 +84,7 @@ app.get('/api/historical/customers', authenticateJWT, historicalController.getCu
 app.get('/api/historical/berths', authenticateJWT, historicalController.getBerthTraffic);
 app.get('/api/historical/commodities', authenticateJWT, historicalController.getCommodityDistribution);
 app.get('/api/historical/gantt', authenticateJWT, historicalController.getGanttData);
+app.get('/api/berth-timeline', authenticateJWT, historicalController.getGanttData);
 
 // Strategic Analytics
 app.get(
