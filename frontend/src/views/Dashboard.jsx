@@ -47,23 +47,6 @@ export default function Dashboard({ token, selectedYear, user }) {
     return () => window.removeEventListener('psidss-data-updated', handler);
   }, [fetchDashboardData]);
 
-  if (loading) {
-    return (
-      <div class="space-y-8 animate-pulse p-6">
-        <div class="h-10 bg-slate-900 rounded-xl w-1/4"></div>
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
-          {[1, 2, 3, 4].map(n => (
-            <div key={n} class="h-32 bg-slate-900 rounded-2xl"></div>
-          ))}
-        </div>
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div class="lg:col-span-2 h-80 bg-slate-900 rounded-2xl"></div>
-          <div class="h-80 bg-slate-900 rounded-2xl"></div>
-        </div>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div class="p-4 bg-red-950/30 border border-red-900/40 rounded-xl text-red-300 flex items-center gap-2 max-w-xl mx-auto my-12">
@@ -74,6 +57,7 @@ export default function Dashboard({ token, selectedYear, user }) {
   }
 
   const formatCurrency = (num) => {
+    if (!num && num !== 0) return '';
     if (num >= 1.0e9) return `₹${(num / 1.0e9).toFixed(2)} Billion`;
     if (num >= 1.0e7) return `₹${(num / 1.0e7).toFixed(2)} Crore`;
     if (num >= 1.0e5) return `₹${(num / 1.0e5).toFixed(2)} Lakh`;
@@ -81,9 +65,12 @@ export default function Dashboard({ token, selectedYear, user }) {
   };
 
   const formatGRT = (num) => {
+    if (!num && num !== 0) return '';
     if (num >= 1.0e6) return `${(num / 1.0e6).toFixed(2)}M Tons`;
     return `${num.toLocaleString('en-IN')} Tons`;
   };
+
+  const isSingleYear = (selectedYear !== 'All' && selectedYear !== 'Recent4') || (kpis?.yearlyTrend && kpis.yearlyTrend.length < 2);
 
   return (
     <div class="space-y-10 animate-fade-in pb-12 px-2 max-w-[1600px] mx-auto">
@@ -117,7 +104,11 @@ export default function Dashboard({ token, selectedYear, user }) {
           </div>
           <div>
             <h3 class="text-3xl font-black text-white font-display tracking-tight">
-              {formatCurrency(kpis?.totalRevenue)}
+              {loading || !kpis ? (
+                <span class="inline-block w-40 h-8 bg-slate-900/85 animate-pulse rounded-md"></span>
+              ) : (
+                formatCurrency(kpis?.totalRevenue)
+              )}
             </h3>
             <span class="text-xs text-emerald-400 font-medium flex items-center gap-1 mt-2">
               Cumulative billing receipts
@@ -127,33 +118,35 @@ export default function Dashboard({ token, selectedYear, user }) {
 
         {/* YoY Growth Percentage */}
         <div class={`p-8 rounded-2xl glass-panel flex flex-col justify-between hover:scale-[1.02] transition-all duration-300 border border-slate-800/40 min-h-[160px] ${
-          (kpis?.growthPercentage || 0) >= 0 ? 'glow-emerald' : 'glow-rose'
+          (!kpis || (kpis?.growthPercentage || 0) >= 0) ? 'glow-emerald' : 'glow-rose'
         }`}>
           <div class="flex items-center justify-between mb-4">
             <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Revenue Growth Trend</span>
             <div class={`p-2.5 rounded-xl ${
-              (kpis?.growthPercentage || 0) >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+              (!kpis || (kpis?.growthPercentage || 0) >= 0) ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
             }`}>
-              {(kpis?.growthPercentage || 0) >= 0 ? <TrendingUp class="h-6 w-6" /> : <TrendingDown class="h-6 w-6" />}
+              {(!kpis || (kpis?.growthPercentage || 0) >= 0) ? <TrendingUp class="h-6 w-6" /> : <TrendingDown class="h-6 w-6" />}
             </div>
           </div>
           <div>
-            {selectedYear === 'All' || selectedYear === 'Recent4' ? (
+            {loading || !kpis ? (
+              <span class="inline-block w-32 h-8 bg-slate-900/85 animate-pulse rounded-md"></span>
+            ) : isSingleYear ? (
               <div>
-                <h3 class={`text-2xl font-black font-display tracking-tight ${(kpis?.cagr || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  CAGR: {(kpis?.cagr || 0) >= 0 ? '+' : ''}{kpis?.cagr}%
+                <h3 class="text-lg font-bold text-slate-400 tracking-tight">
+                  N/A
                 </h3>
-                <span class="text-xs text-slate-400 font-medium mt-2 block">
-                  Overall Growth: {(kpis?.overallGrowth || 0) >= 0 ? '+' : ''}{kpis?.overallGrowth}%
+                <span class="text-[10px] text-slate-500 font-medium block mt-1.5 leading-normal">
+                  N/A — needs at least two fiscal years
                 </span>
               </div>
             ) : (
               <div>
-                <h3 class={`text-3xl font-black font-display tracking-tight ${(kpis?.growthPercentage || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {(kpis?.growthPercentage || 0) >= 0 ? '+' : ''}{kpis?.growthPercentage}%
+                <h3 class={`text-2xl font-black font-display tracking-tight ${kpis?.cagr && kpis.cagr !== 0 ? ((kpis.cagr || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400') : 'text-slate-400'}`}>
+                  CAGR: {kpis?.cagr && kpis.cagr !== 0 ? `${kpis.cagr >= 0 ? '+' : ''}${kpis.cagr}%` : 'N/A'}
                 </h3>
-                <span class="text-xs text-slate-400 font-medium flex items-center gap-1 mt-2">
-                  VS previous fiscal year
+                <span class="text-xs text-slate-400 font-medium mt-2 block">
+                  Overall Growth: {kpis?.overallGrowth && kpis.overallGrowth !== 0 ? `${kpis.overallGrowth >= 0 ? '+' : ''}${kpis.overallGrowth}%` : 'N/A'}
                 </span>
               </div>
             )}
@@ -170,7 +163,11 @@ export default function Dashboard({ token, selectedYear, user }) {
           </div>
           <div>
             <h3 class="text-3xl font-black text-white font-display tracking-tight">
-              {kpis?.totalVessels.toLocaleString('en-IN')}
+              {loading || !kpis ? (
+                <span class="inline-block w-28 h-8 bg-slate-900/85 animate-pulse rounded-md"></span>
+              ) : (
+                kpis?.totalVessels.toLocaleString('en-IN')
+              )}
             </h3>
             <span class="text-xs text-slate-400 font-medium flex items-center gap-1 mt-2">
               Distinct shipping line arrivals
@@ -188,7 +185,11 @@ export default function Dashboard({ token, selectedYear, user }) {
           </div>
           <div>
             <h3 class="text-3xl font-black text-white font-display tracking-tight">
-              {formatGRT(kpis?.totalGRT)}
+              {loading || !kpis ? (
+                <span class="inline-block w-36 h-8 bg-slate-900/85 animate-pulse rounded-md"></span>
+              ) : (
+                formatGRT(kpis?.totalGRT)
+              )}
             </h3>
             <span class="text-xs text-slate-400 font-medium flex items-center gap-1 mt-2">
               Volume capacity handled
@@ -215,57 +216,71 @@ export default function Dashboard({ token, selectedYear, user }) {
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-slate-300 font-medium">
               
-              {/* Left group */}
-              <div class="space-y-4">
-                <div class="p-4 bg-slate-950/45 border border-slate-900 rounded-xl space-y-1.5 hover:border-slate-800 transition-all">
-                  <span class="text-[9px] uppercase tracking-wider font-extrabold text-blue-400">Revenue Growth</span>
-                  <p class="text-slate-200 text-xs font-semibold leading-relaxed">
-                    {selectedYear === 'Recent4' ? (
-                      <span>Port revenue increased consistently over the last four fiscal years, with strongest YoY growth in <strong class="text-emerald-400">FY 2023–24</strong>.</span>
-                    ) : (
-                      <span>Port revenue has <strong class="text-emerald-400">{kpis?.growthPercentage >= 0 ? 'increased' : 'decreased'} by {Math.abs(kpis?.growthPercentage).toFixed(2)}%</strong> compared to previous year averages.</span>
-                    )}
-                  </p>
+              {loading || !kpis ? (
+                <div class="col-span-2 space-y-4">
+                  {[1, 2, 3].map(n => (
+                    <div key={n} class="h-16 bg-slate-900/50 animate-pulse border border-slate-950 rounded-xl"></div>
+                  ))}
                 </div>
+              ) : (
+                <>
+                  {/* Left group */}
+                  <div class="space-y-4">
+                    <div class="p-4 bg-slate-950/45 border border-slate-900 rounded-xl space-y-1.5 hover:border-slate-800 transition-all">
+                      <span class="text-[9px] uppercase tracking-wider font-extrabold text-blue-400">Revenue Growth</span>
+                      <p class="text-slate-200 text-xs font-semibold leading-relaxed">
+                        {selectedYear === 'Recent4' ? (
+                          <span>Port revenue increased consistently over the last four fiscal years, with strongest YoY growth in <strong class="text-emerald-400">FY 2023–24</strong>.</span>
+                        ) : (
+                          <span>Port revenue has <strong class="text-emerald-400">{kpis?.growthPercentage >= 0 ? 'increased' : 'decreased'} by {Math.abs(kpis?.growthPercentage).toFixed(2)}%</strong> compared to previous year averages.</span>
+                        )}
+                      </p>
+                    </div>
 
-                <div class="p-4 bg-slate-950/45 border border-slate-900 rounded-xl space-y-1.5 hover:border-slate-800 transition-all">
-                  <span class="text-[9px] uppercase tracking-wider font-extrabold text-violet-400">Highest Revenue Cargo Category</span>
-                  <p class="text-slate-200 text-xs font-semibold">
-                    The single most profitable charge category is <strong class="text-white font-extrabold">{kpis?.topCommodity}</strong>.
-                  </p>
-                </div>
+                    <div class="p-4 bg-slate-950/45 border border-slate-900 rounded-xl space-y-1.5 hover:border-slate-800 transition-all">
+                      <span class="text-[9px] uppercase tracking-wider font-extrabold text-violet-400">Highest Revenue Category</span>
+                      <p class="text-slate-200 text-xs font-semibold whitespace-normal break-words">
+                        {kpis?.topCommodity === 'OTHER CARGO' ? (
+                          <span>The highest revenue-generating category is <strong class="text-white font-extrabold">OTHER CARGO</strong>.</span>
+                        ) : (
+                          <span>The highest revenue-generating category is <strong class="text-white font-extrabold">{kpis?.topCommodity}</strong>.</span>
+                        )}
+                      </p>
+                    </div>
 
-                <div class="p-4 bg-slate-950/45 border border-slate-900 rounded-xl space-y-1.5 hover:border-slate-800 transition-all">
-                  <span class="text-[9px] uppercase tracking-wider font-extrabold text-amber-400">Highest Revenue Customer</span>
-                  <p class="text-slate-200 text-xs font-semibold leading-normal" title={kpis?.topCustomer}>
-                    Top billing partner: <strong class="text-white font-extrabold">{kpis?.topCustomer}</strong>.
-                  </p>
-                </div>
-              </div>
+                    <div class="p-4 bg-slate-950/45 border border-slate-900 rounded-xl space-y-1.5 hover:border-slate-800 transition-all">
+                      <span class="text-[9px] uppercase tracking-wider font-extrabold text-amber-400">Highest Revenue Customer</span>
+                      <p class="text-slate-200 text-xs font-semibold leading-normal whitespace-normal break-words" title={kpis?.topCustomer}>
+                        Top billing partner: <strong class="text-white font-extrabold">{kpis?.topCustomer}</strong>.
+                      </p>
+                    </div>
+                  </div>
 
-              {/* Right group */}
-              <div class="space-y-4">
-                <div class="p-4 bg-slate-950/45 border border-slate-900 rounded-xl space-y-1.5 hover:border-slate-800 transition-all">
-                  <span class="text-[9px] uppercase tracking-wider font-extrabold text-pink-400">Highest Revenue Berth</span>
-                  <p class="text-slate-200 text-xs font-semibold">
-                    The highest producing berth is <strong class="text-white font-extrabold">Berth {kpis?.topBerth}</strong>.
-                  </p>
-                </div>
+                  {/* Right group */}
+                  <div class="space-y-4">
+                    <div class="p-4 bg-slate-950/45 border border-slate-900 rounded-xl space-y-1.5 hover:border-slate-800 transition-all">
+                      <span class="text-[9px] uppercase tracking-wider font-extrabold text-pink-400">Highest Revenue Berth</span>
+                      <p class="text-slate-200 text-xs font-semibold whitespace-normal break-words">
+                        The highest producing berth is <strong class="text-white font-extrabold">Berth {kpis?.topBerth}</strong>.
+                      </p>
+                    </div>
 
-                <div class="p-4 bg-slate-950/45 border border-slate-900 rounded-xl space-y-1.5 hover:border-slate-800 transition-all">
-                  <span class="text-[9px] uppercase tracking-wider font-extrabold text-emerald-400">Fastest Growing Cargo Category</span>
-                  <p class="text-slate-200 text-xs font-semibold leading-relaxed">
-                    Highest YoY demand: <strong class="text-emerald-400">{kpis?.fastestGrowingCommodity}</strong>.
-                  </p>
-                </div>
+                    <div class="p-4 bg-slate-950/45 border border-slate-900 rounded-xl space-y-1.5 hover:border-slate-800 transition-all">
+                      <span class="text-[9px] uppercase tracking-wider font-extrabold text-emerald-400">Fastest Growing Revenue Category</span>
+                      <p class="text-slate-200 text-xs font-semibold leading-relaxed whitespace-normal break-words">
+                        Highest YoY demand: <strong class="text-emerald-400">{kpis?.fastestGrowingCommodity}</strong>.
+                      </p>
+                    </div>
 
-                <div class="p-4 bg-slate-950/45 border border-slate-900 rounded-xl space-y-1.5 hover:border-slate-800 transition-all">
-                  <span class="text-[9px] uppercase tracking-wider font-extrabold text-rose-500">Largest Business Risk</span>
-                  <p class="text-slate-200 text-xs font-semibold" title={kpis?.largestBusinessRisk}>
-                    Primary exposure: <strong class="text-rose-400">{kpis?.largestBusinessRisk}</strong>.
-                  </p>
-                </div>
-              </div>
+                    <div class="p-4 bg-slate-950/45 border border-slate-900 rounded-xl space-y-1.5 hover:border-slate-800 transition-all">
+                      <span class="text-[9px] uppercase tracking-wider font-extrabold text-rose-500">Largest Business Risk</span>
+                      <p class="text-slate-200 text-xs font-semibold whitespace-normal break-words" title={kpis?.largestBusinessRisk}>
+                        Primary exposure: <strong class="text-rose-400">{kpis?.largestBusinessRisk}</strong>.
+                      </p>
+                    </div>
+                  </div>
+                </>
+              )}
 
             </div>
           </div>
@@ -285,41 +300,47 @@ export default function Dashboard({ token, selectedYear, user }) {
             </div>
 
             <div class="space-y-4">
-              
-              <div class="flex items-center justify-between p-4 bg-slate-950/40 border border-slate-900 rounded-xl hover:border-slate-800 transition-all">
-                <div class="flex items-center gap-3">
-                  <Users class="h-4.5 w-4.5 text-blue-400" />
-                  <span class="text-xs text-slate-400 font-semibold">Active Partners</span>
-                </div>
-                <span class="text-xs font-bold text-white">{kpis?.totalCustomers}</span>
-              </div>
+              {loading || !kpis ? (
+                [1, 2, 3, 4].map(n => (
+                  <div key={n} class="h-12 bg-slate-900/50 animate-pulse border border-slate-950 rounded-xl"></div>
+                ))
+              ) : (
+                <>
+                  <div class="flex items-center justify-between p-4 bg-slate-950/40 border border-slate-900 rounded-xl hover:border-slate-800 transition-all">
+                    <div class="flex items-center gap-3">
+                      <Users class="h-4.5 w-4.5 text-blue-400" />
+                      <span class="text-xs text-slate-400 font-semibold">Active Partners</span>
+                    </div>
+                    <span class="text-xs font-bold text-white">{kpis?.totalCustomers}</span>
+                  </div>
 
-              <div class="flex items-center justify-between p-4 bg-slate-950/40 border border-slate-900 rounded-xl hover:border-slate-800 transition-all">
-                <div class="flex items-center gap-3">
-                  <Anchor class="h-4.5 w-4.5 text-violet-400" />
-                  <span class="text-xs text-slate-400 font-semibold">Active Berths</span>
-                </div>
-                <span class="text-xs font-bold text-white">{kpis?.totalBerths}</span>
-              </div>
+                  <div class="flex items-center justify-between p-4 bg-slate-950/40 border border-slate-900 rounded-xl hover:border-slate-800 transition-all">
+                    <div class="flex items-center gap-3">
+                      <Anchor class="h-4.5 w-4.5 text-violet-400" />
+                      <span class="text-xs text-slate-400 font-semibold">Active Berths</span>
+                    </div>
+                    <span class="text-xs font-bold text-white">{kpis?.totalBerths}</span>
+                  </div>
 
-              <div class="flex items-center justify-between p-4 bg-slate-950/40 border border-slate-900 rounded-xl hover:border-slate-800 transition-all">
-                <div class="flex items-center gap-3">
-                  <Package class="h-4.5 w-4.5 text-emerald-400" />
-                  <span class="text-xs text-slate-400 font-semibold">Active Commodities</span>
-                </div>
-                <span class="text-xs font-bold text-white">{kpis?.totalCommodities}</span>
-              </div>
+                  <div class="flex items-center justify-between p-4 bg-slate-950/40 border border-slate-900 rounded-xl hover:border-slate-800 transition-all">
+                    <div class="flex items-center gap-3">
+                      <Package class="h-4.5 w-4.5 text-emerald-400" />
+                      <span class="text-xs text-slate-400 font-semibold">Active Commodities</span>
+                    </div>
+                    <span class="text-xs font-bold text-white">{kpis?.totalCommodities}</span>
+                  </div>
 
-              <div class="flex items-center justify-between p-4 bg-slate-950/40 border border-slate-900 rounded-xl hover:border-slate-800 transition-all">
-                <div class="flex items-center gap-3">
-                  <FileText class="h-4.5 w-4.5 text-orange-400" />
-                  <span class="text-xs text-slate-400 font-semibold">Total Records parsed</span>
-                </div>
-                <span class="text-xs font-bold text-white">
-                  {kpis?.totalTransactions ? kpis.totalTransactions.toLocaleString('en-IN') : '0'}
-                </span>
-              </div>
-
+                  <div class="flex items-center justify-between p-4 bg-slate-950/40 border border-slate-900 rounded-xl hover:border-slate-800 transition-all">
+                    <div class="flex items-center gap-3">
+                      <FileText class="h-4.5 w-4.5 text-orange-400" />
+                      <span class="text-xs text-slate-400 font-semibold">Total Records parsed</span>
+                    </div>
+                    <span class="text-xs font-bold text-white">
+                      {kpis?.totalTransactions ? kpis.totalTransactions.toLocaleString('en-IN') : '0'}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

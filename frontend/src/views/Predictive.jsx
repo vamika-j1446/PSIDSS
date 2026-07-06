@@ -64,14 +64,6 @@ export default function Predictive({ token, selectedYear, activeTab }) {
     return 'No risk';
   };
 
-  if (loading) {
-    return (
-      <div class="flex items-center justify-center h-96">
-        <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div class="p-4 bg-red-950/30 border border-red-900/40 rounded-xl text-red-300 flex items-center gap-2 max-w-xl mx-auto my-12">
@@ -137,7 +129,11 @@ export default function Predictive({ token, selectedYear, activeTab }) {
           <span class="text-[10px] text-slate-500 font-mono">Horizon: {horizonFilter.toUpperCase()}</span>
         </div>
 
-        {filteredRevenueForecasts.length === 0 ? (
+        {loading || !data ? (
+          <div class="h-80 w-full flex items-center justify-center bg-slate-950/20 border border-slate-900 rounded-xl animate-pulse text-xs text-slate-500">
+            Loading Forecast Data...
+          </div>
+        ) : filteredRevenueForecasts.length === 0 ? (
           <p class="text-slate-400 text-xs text-center py-12 border border-slate-900 rounded-xl">
             No forecasts computed yet. Ingest port records first.
           </p>
@@ -206,33 +202,33 @@ export default function Predictive({ token, selectedYear, activeTab }) {
           <div class="p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col justify-between">
             <span class="text-slate-400 text-[10px] uppercase block mb-1">Customer Churn</span>
             <span class={`text-sm font-bold ${
-              data?.calculatedRisks?.[0]?.level.includes('HIGH') ? 'text-red-400' : data?.calculatedRisks?.[0]?.level.includes('MEDIUM') ? 'text-yellow-400' : 'text-emerald-400'
+              loading || !data ? 'text-slate-500 animate-pulse' : data?.calculatedRisks?.[0]?.level.includes('HIGH') ? 'text-red-400' : data?.calculatedRisks?.[0]?.level.includes('MEDIUM') ? 'text-yellow-400' : 'text-emerald-400'
             }`}>
-              {formatRiskStatusLabel(data?.calculatedRisks?.[0]?.level)}
+              {loading || !data ? 'LOADING...' : formatRiskStatusLabel(data?.calculatedRisks?.[0]?.level)}
             </span>
           </div>
           <div class="p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col justify-between">
             <span class="text-slate-400 text-[10px] uppercase block mb-1">Berth Dependency</span>
             <span class={`text-sm font-bold ${
-              data?.calculatedRisks?.[1]?.level.includes('HIGH') ? 'text-red-400' : data?.calculatedRisks?.[1]?.level.includes('MEDIUM') ? 'text-yellow-400' : 'text-emerald-400'
+              loading || !data ? 'text-slate-500 animate-pulse' : data?.calculatedRisks?.[1]?.level.includes('HIGH') ? 'text-red-400' : data?.calculatedRisks?.[1]?.level.includes('MEDIUM') ? 'text-yellow-400' : 'text-emerald-400'
             }`}>
-              {formatRiskStatusLabel(data?.calculatedRisks?.[1]?.level)}
+              {loading || !data ? 'LOADING...' : formatRiskStatusLabel(data?.calculatedRisks?.[1]?.level)}
             </span>
           </div>
           <div class="p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col justify-between">
             <span class="text-slate-400 text-[10px] uppercase block mb-1">Commodity Decline</span>
             <span class={`text-sm font-bold ${
-              data?.calculatedRisks?.[2]?.level.includes('HIGH') ? 'text-red-400' : data?.calculatedRisks?.[2]?.level.includes('MEDIUM') ? 'text-yellow-400' : 'text-emerald-400'
+              loading || !data ? 'text-slate-500 animate-pulse' : data?.calculatedRisks?.[2]?.level.includes('HIGH') ? 'text-red-400' : data?.calculatedRisks?.[2]?.level.includes('MEDIUM') ? 'text-yellow-400' : 'text-emerald-400'
             }`}>
-              {formatRiskStatusLabel(data?.calculatedRisks?.[2]?.level)}
+              {loading || !data ? 'LOADING...' : formatRiskStatusLabel(data?.calculatedRisks?.[2]?.level)}
             </span>
           </div>
           <div class="p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col justify-between">
             <span class="text-slate-400 text-[10px] uppercase block mb-1">Revenue Projection</span>
             <span class={`text-sm font-bold ${
-              data?.calculatedRisks?.[3]?.level.includes('HIGH') ? 'text-red-400' : data?.calculatedRisks?.[3]?.level.includes('MEDIUM') ? 'text-yellow-400' : 'text-emerald-400'
+              loading || !data ? 'text-slate-500 animate-pulse' : data?.calculatedRisks?.[3]?.level.includes('HIGH') ? 'text-red-400' : data?.calculatedRisks?.[3]?.level.includes('MEDIUM') ? 'text-yellow-400' : 'text-emerald-400'
             }`}>
-              {formatRiskStatusLabel(data?.calculatedRisks?.[3]?.level)}
+              {loading || !data ? 'LOADING...' : formatRiskStatusLabel(data?.calculatedRisks?.[3]?.level)}
             </span>
           </div>
         </div>
@@ -243,7 +239,13 @@ export default function Predictive({ token, selectedYear, activeTab }) {
         <h4 class="text-base font-bold text-white flex items-center gap-2">
           <AlertCircle class="h-5 w-5 text-blue-400" /> Executive Risk Assessment
         </h4>
-        {(!data?.calculatedRisks || data.calculatedRisks.length === 0) ? (
+        {loading || !data ? (
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {[1, 2, 3, 4].map(n => (
+              <div key={n} class="h-28 bg-slate-900 animate-pulse rounded-xl"></div>
+            ))}
+          </div>
+        ) : (!data?.calculatedRisks || data.calculatedRisks.length === 0) ? (
           <div class="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl text-center">
             <span class="text-xs font-bold text-emerald-400 block mb-1">No Risk Detected</span>
             <p class="text-[10px] text-slate-500">All port predictive metrics indicate stable operations. No risk detected.</p>
@@ -316,7 +318,13 @@ export default function Predictive({ token, selectedYear, activeTab }) {
             <Users class="h-5 w-5 text-violet-400" /> At-Risk Customers (Negative Forecasts)
           </h4>
           
-          {(!data?.atRiskCustomers || data.atRiskCustomers.length === 0) ? (
+          {loading || !data ? (
+            <div class="space-y-3">
+              {[1, 2].map(n => (
+                <div key={n} class="h-24 bg-slate-900/60 animate-pulse border border-slate-950 rounded-xl"></div>
+              ))}
+            </div>
+          ) : (!data?.atRiskCustomers || data.atRiskCustomers.length === 0) ? (
             <div class="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl text-center">
               <span class="text-xs font-bold text-emerald-400 block mb-1">No Risk Detected</span>
               <p class="text-[10px] text-slate-500">No customers currently show negative forecast based on recent historical trend.</p>
@@ -361,7 +369,13 @@ export default function Predictive({ token, selectedYear, activeTab }) {
             <AlertTriangle class="h-5 w-5 text-yellow-500 animate-pulse" /> Declining Commodity Projections
           </h4>
           
-          {(!data?.decliningCommodities || data.decliningCommodities.length === 0) ? (
+          {loading || !data ? (
+            <div class="space-y-3">
+              {[1, 2].map(n => (
+                <div key={n} class="h-24 bg-slate-900/60 animate-pulse border border-slate-950 rounded-xl"></div>
+              ))}
+            </div>
+          ) : (!data?.decliningCommodities || data.decliningCommodities.length === 0) ? (
             <div class="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl text-center">
               <span class="text-xs font-bold text-emerald-400 block mb-1">No Risk Detected</span>
               <p class="text-[10px] text-slate-500">No declining commodities found for the selected period.</p>

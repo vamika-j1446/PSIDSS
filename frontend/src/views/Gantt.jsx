@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Anchor, Calendar, Info, AlertCircle, HelpCircle } from 'lucide-react';
-import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
 
 export default function Gantt({ token }) {
   const [vessels, setVessels] = useState([]);
@@ -103,46 +101,38 @@ export default function Gantt({ token }) {
     fetchGanttData();
   }, [token]);
 
-  // Automatic filter reload on date picker change
-  useEffect(() => {
-    if (!inputStartDate || !inputEndDate) return;
-
-    if (inputEndDate < inputStartDate) {
+  const handleStartDateChange = (val) => {
+    if (!val) return;
+    setStartDateStr(val);
+    const dateObj = parseLocalDate(val);
+    setInputStartDate(dateObj);
+    
+    if (inputEndDate && dateObj > inputEndDate) {
       setValidationError("End date cannot be earlier than start date.");
       return;
     }
     setValidationError('');
+    fetchGanttData(val, endDateStr);
+  };
 
-    const startStr = formatDateString(inputStartDate);
-    const endStr = formatDateString(inputEndDate);
+  const handleEndDateChange = (val) => {
+    if (!val) return;
+    setEndDateStr(val);
+    const dateObj = parseLocalDate(val);
+    setInputEndDate(dateObj);
 
-    if (startStr !== startDateStr || endStr !== endDateStr) {
-      setStartDateStr(startStr);
-      setEndDateStr(endStr);
-      fetchGanttData(startStr, endStr);
+    if (inputStartDate && dateObj < inputStartDate) {
+      setValidationError("End date cannot be earlier than start date.");
+      return;
     }
-  }, [inputStartDate, inputEndDate]);
+    setValidationError('');
+    fetchGanttData(startDateStr, val);
+  };
 
   const hasValidRange = isValidDate(startDateStr) && isValidDate(endDateStr);
   const timelineStart = hasValidRange ? parseLocalDate(startDateStr) : null;
   const timelineEnd = hasValidRange ? parseLocalDate(endDateStr) : null;
 
-  if (loading) {
-    return (
-      <div class="flex items-center justify-center h-96">
-        <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div class="p-4 bg-red-950/30 border border-red-900/40 rounded-xl text-red-300 flex items-center gap-2 max-w-xl mx-auto my-12">
-        <AlertCircle class="h-5 w-5" />
-        <span>{error}</span>
-      </div>
-    );
-  }
 
   // Get distinct berths to create swimlanes
   const berths = [...new Set(vessels.map(v => v.berth))].sort();
@@ -219,17 +209,6 @@ export default function Gantt({ token }) {
     return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 hover:shadow-[0_0_15px_rgba(16,185,129,0.15)]';
   };
 
-  // Generate date markers for columns
-  const activeVesselsInWindow = vessels.filter(v => getTimelineOverlap(v) !== null);
-  const columnsCount = 6;
-  const colMarkers = [];
-  if (timelineStart && timelineEnd) {
-    const stepMs = (timelineEnd.getTime() - timelineStart.getTime()) / (columnsCount - 1);
-    for (let i = 0; i < columnsCount; i++) {
-      colMarkers.push(new Date(timelineStart.getTime() + i * stepMs));
-    }
-  }
-
   return (
     <div class="space-y-8 animate-fade-in pb-12">
       {/* Header & Local Inline Date Selectors */}
@@ -244,28 +223,22 @@ export default function Gantt({ token }) {
             {/* Start Date picker */}
             <div class="flex items-center gap-2">
               <span class="text-slate-500 uppercase tracking-wider text-[10px]">Start Date:</span>
-              <DatePicker 
-                selected={inputStartDate} 
-                onChange={(date) => setInputStartDate(date)}
-                showMonthDropdown
-                showYearDropdown
-                dropdownMode="select"
-                dateFormat="dd-MM-yyyy"
-                className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500 cursor-pointer w-28"
+              <input 
+                type="date"
+                value={startDateStr}
+                onChange={(e) => handleStartDateChange(e.target.value)}
+                class="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500 cursor-pointer w-36"
               />
             </div>
 
             {/* End Date picker */}
             <div class="flex items-center gap-2">
               <span class="text-slate-500 uppercase tracking-wider text-[10px]">End Date:</span>
-              <DatePicker 
-                selected={inputEndDate} 
-                onChange={(date) => setInputEndDate(date)}
-                showMonthDropdown
-                showYearDropdown
-                dropdownMode="select"
-                dateFormat="dd-MM-yyyy"
-                className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500 cursor-pointer w-28"
+              <input 
+                type="date"
+                value={endDateStr}
+                onChange={(e) => handleEndDateChange(e.target.value)}
+                class="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500 cursor-pointer w-36"
               />
             </div>
           </div>
@@ -282,7 +255,16 @@ export default function Gantt({ token }) {
 
       {/* Main Gantt Timeline Panel */}
       <div class="p-6 rounded-2xl glass-panel space-y-6 glow-blue overflow-hidden">
-        {!hasValidRange ? (
+        {loading ? (
+          <div class="flex items-center justify-center py-20">
+            <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+          </div>
+        ) : error ? (
+          <div class="p-4 bg-red-950/30 border border-red-900/40 rounded-xl text-red-300 flex items-center gap-2 max-w-xl mx-auto my-12">
+            <AlertCircle class="h-5 w-5" />
+            <span>{error}</span>
+          </div>
+        ) : !hasValidRange ? (
           <div class="p-12 text-center text-slate-400">
             <Calendar class="h-8 w-8 text-yellow-500 mx-auto mb-3 animate-pulse" />
             <p class="font-semibold text-sm">Please select a valid date range to display the timeline.</p>

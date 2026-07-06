@@ -258,8 +258,24 @@ app.post('/api/admin/pins/vcns/regenerate', authenticateJWT, requireRole(['Admin
   }
 });
 
+// Serve static frontend files from Vite production build
+const frontendDistPath = path.join(backendRoot, '../frontend/dist');
+if (fs.existsSync(frontendDistPath)) {
+  console.log('Serving frontend assets from:', frontendDistPath);
+  app.use(express.static(frontendDistPath));
+  
+  // Fallback all non-API GET requests to index.html for React Router SPA integration
+  app.get('*', (req, res, next) => {
+    if (req.url.startsWith('/api')) {
+      return next();
+    }
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+}
+
 // Express Error Handler
 app.use((err, req, res, next) => {
+
   console.error('[EXPRESS ERROR]', err);
   res.status(500).json({ error: err.message || 'Internal Server Error' });
 });
@@ -409,6 +425,16 @@ async function startServer() {
     await sequelize.authenticate();
     console.log('Database connected successfully.');
 
+    // Apply SQLite performance optimizations
+    if (sequelize.options.dialect === 'sqlite') {
+      console.log('Applying SQLite performance tuning PRAGMAs...');
+      await sequelize.query('PRAGMA journal_mode = WAL');
+      await sequelize.query('PRAGMA synchronous = NORMAL');
+      await sequelize.query('PRAGMA cache_size = -131072'); // 128MB cache
+      await sequelize.query('PRAGMA temp_store = MEMORY');
+      console.log('SQLite performance tuning applied.');
+    }
+
     await ensureSourceYearColumn();
 
     await sequelize.sync();
@@ -448,11 +474,15 @@ async function startServer() {
       console.error('Failed to sync portal pins:', e);
     }
 
-    try {
-      const warmup = require('./utils/warmup');
-      warmup();
-    } catch (e) {
-      console.error('Failed to trigger warmup:', e);
+    if (process.env.ENABLE_WARMUP === 'true') {
+      try {
+        const warmup = require('./utils/warmup');
+        warmup();
+      } catch (e) {
+        console.error('Failed to trigger warmup:', e);
+      }
+    } else {
+      console.log('Heavy cache warmup is disabled by default.');
     }
 
     const server = app.listen(PORT, () => {

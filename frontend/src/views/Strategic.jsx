@@ -8,6 +8,7 @@ export default function Strategic({ token, selectedYear, activeTab }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState('granular'); // 'granular' or 'group'
+  const [expandedRisks, setExpandedRisks] = useState({});
   const fetchingRef = useRef(false);
 
   const fetchStrategicData = useCallback(async () => {
@@ -41,27 +42,11 @@ export default function Strategic({ token, selectedYear, activeTab }) {
     return () => window.removeEventListener('psidss-data-updated', handler);
   }, [fetchStrategicData]);
 
-  if (loading) {
-    return (
-      <div class="flex items-center justify-center h-96">
-        <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div class="p-4 bg-red-950/30 border border-red-900/40 rounded-xl text-red-300 flex items-center gap-2 max-w-xl mx-auto my-12">
-        <AlertCircle class="h-5 w-5" />
-        <span>{error}</span>
-      </div>
-    );
-  }
-
-  const hhiVal = data?.concentration.hhi || 0;
+  const hhiVal = data?.concentration?.hhi || 0;
   const stabilityScore = Math.max(0, Math.min(100, Math.round(100 - (hhiVal / 100))));
 
   const getStabilityRiskText = (score) => {
+    if (loading || !data) return { label: 'Loading...', color: 'text-slate-500' };
     if (score < 75) return { label: 'Highly Concentrated (Critical Risk)', color: 'text-red-400' };
     if (score < 85) return { label: 'Moderately Diversified (Moderate Risk)', color: 'text-yellow-400' };
     return { label: 'Well Diversified (Low Risk)', color: 'text-emerald-400' };
@@ -70,6 +55,7 @@ export default function Strategic({ token, selectedYear, activeTab }) {
   const stabilityStatus = getStabilityRiskText(stabilityScore);
 
   const formatCurrency = (num) => {
+    if (!num && num !== 0) return '';
     if (num >= 1.0e9) return `₹${(num / 1.0e9).toFixed(2)} B`;
     if (num >= 1.0e7) return `₹${(num / 1.0e7).toFixed(2)} Cr`;
     if (num >= 1.0e5) return `₹${(num / 1.0e5).toFixed(2)} L`;
@@ -97,12 +83,57 @@ export default function Strategic({ token, selectedYear, activeTab }) {
   const expData = viewMode === 'granular' ? expandingList : expandingGroups;
   const decData = viewMode === 'granular' ? decliningList : decliningGroups;
 
+  const getRiskStatus = (riskTitle) => {
+    const risk = data?.risks?.find(r => r.title === riskTitle);
+    if (!risk) return 'No risk';
+    const status = String(risk.status).toLowerCase();
+    if (status.includes('high') || status.includes('critical')) return 'High';
+    if (status.includes('medium')) return 'Medium';
+    if (status.includes('low')) return 'Low';
+    return 'No risk';
+  };
+
+  const customerChurnVal = loading || !data ? 'LOADING...' : getRiskStatus('Customer Performance');
+  const berthDependencyVal = loading || !data ? 'LOADING...' : getRiskStatus('Berth Performance');
+  const commodityDeclineVal = loading || !data ? 'LOADING...' : (decliningList.length > 0 ? 'High' : 'No risk');
+  const revenueProjectionVal = loading || !data ? 'LOADING...' : getRiskStatus('Revenue Trend');
+
+  const getStatusColorClass = (val) => {
+    if (val === 'High') return 'text-red-400 animate-pulse';
+    if (val === 'Medium') return 'text-yellow-400';
+    if (val === 'Low') return 'text-emerald-400';
+    return 'text-slate-500';
+  };
+
   return (
     <div class="space-y-8 animate-fade-in pb-12">
       {/* Header */}
       <div>
         <h2 class="text-3xl font-extrabold text-white tracking-tight">Strategic Risk Assessment</h2>
         <p class="text-slate-400 text-sm mt-1">Billing concentration diagnostics, market stability indicators, and terminal capacity bottlenecks.</p>
+      </div>
+
+      {/* Risk Summary row */}
+      <div class="p-6 rounded-2xl glass-panel border border-slate-900 glow-blue">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300 mb-4">Risk Summary</h4>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-xs font-semibold text-slate-300">
+          <div class="p-4 bg-slate-950/40 border border-slate-900 rounded-xl flex flex-col justify-between min-h-[70px] hover:border-slate-800 transition-all">
+            <span class="text-slate-500 uppercase text-[9px] tracking-wider block mb-1">Customer Churn</span>
+            <span class={`text-sm font-bold ${getStatusColorClass(customerChurnVal)}`}>{customerChurnVal}</span>
+          </div>
+          <div class="p-4 bg-slate-950/40 border border-slate-900 rounded-xl flex flex-col justify-between min-h-[70px] hover:border-slate-800 transition-all">
+            <span class="text-slate-500 uppercase text-[9px] tracking-wider block mb-1">Berth Dependency</span>
+            <span class={`text-sm font-bold ${getStatusColorClass(berthDependencyVal)}`}>{berthDependencyVal}</span>
+          </div>
+          <div class="p-4 bg-slate-950/40 border border-slate-900 rounded-xl flex flex-col justify-between min-h-[70px] hover:border-slate-800 transition-all">
+            <span class="text-slate-500 uppercase text-[9px] tracking-wider block mb-1">Commodity Decline</span>
+            <span class={`text-sm font-bold ${getStatusColorClass(commodityDeclineVal)}`}>{commodityDeclineVal}</span>
+          </div>
+          <div class="p-4 bg-slate-950/40 border border-slate-900 rounded-xl flex flex-col justify-between min-h-[70px] hover:border-slate-800 transition-all">
+            <span class="text-slate-500 uppercase text-[9px] tracking-wider block mb-1">Revenue Projection</span>
+            <span class={`text-sm font-bold ${getStatusColorClass(revenueProjectionVal)}`}>{revenueProjectionVal}</span>
+          </div>
+        </div>
       </div>
 
       {/* Top Section: HHI and Concentration Gauges */}
@@ -117,7 +148,11 @@ export default function Strategic({ token, selectedYear, activeTab }) {
             <div>
               <span class="text-xs text-slate-500 font-semibold uppercase tracking-wider block">Market Stability Score</span>
               <h3 class="text-4xl font-extrabold text-white mt-1 font-display">
-                {stabilityScore}%
+                {loading || !data ? (
+                  <span class="inline-block w-20 h-8 bg-slate-900 animate-pulse rounded"></span>
+                ) : (
+                  `${stabilityScore}%`
+                )}
               </h3>
               <p class="text-[10px] text-slate-500 leading-normal mt-1.5">
                 Measures port carrier diversification. A higher percentage indicates lower revenue dependency on a single shipping client.
@@ -131,12 +166,12 @@ export default function Strategic({ token, selectedYear, activeTab }) {
               <div>
                 <div class="flex justify-between text-xs font-medium text-slate-400 mb-1">
                   <span>Top Client revenue share</span>
-                  <span class="text-slate-200">{data?.concentration.top1Share}%</span>
+                  <span class="text-slate-200">{loading || !data ? '...' : `${data?.concentration?.top1Share}%`}</span>
                 </div>
                 <div class="h-1.5 bg-slate-900 rounded-full overflow-hidden">
                   <div 
-                    class={`h-full rounded-full ${data?.concentration.top1Share > 50 ? 'bg-red-500' : data?.concentration.top1Share > 30 ? 'bg-yellow-500' : 'bg-emerald-500'}`}
-                    style={{ width: `${data?.concentration.top1Share}%` }}
+                    class={`h-full rounded-full ${data?.concentration?.top1Share > 50 ? 'bg-red-500' : data?.concentration?.top1Share > 30 ? 'bg-yellow-500' : 'bg-emerald-500'}`}
+                    style={{ width: `${loading || !data ? 0 : data?.concentration?.top1Share}%` }}
                   ></div>
                 </div>
               </div>
@@ -144,12 +179,12 @@ export default function Strategic({ token, selectedYear, activeTab }) {
               <div>
                 <div class="flex justify-between text-xs font-medium text-slate-400 mb-1">
                   <span>Top 5 Clients combined share</span>
-                  <span class="text-slate-200">{data?.concentration.top5Share}%</span>
+                  <span class="text-slate-200">{loading || !data ? '...' : `${data?.concentration?.top5Share}%`}</span>
                 </div>
                 <div class="h-1.5 bg-slate-900 rounded-full overflow-hidden">
                   <div 
                     class={`h-full rounded-full bg-violet-500`}
-                    style={{ width: `${data?.concentration.top5Share}%` }}
+                    style={{ width: `${loading || !data ? 0 : data?.concentration?.top5Share}%` }}
                   ></div>
                 </div>
               </div>
@@ -164,7 +199,13 @@ export default function Strategic({ token, selectedYear, activeTab }) {
           </h4>
           
           <div class="space-y-4 max-h-[340px] overflow-y-auto pr-1">
-            {(!data?.risks || data.risks.length === 0) ? (
+            {loading || !data ? (
+              <div class="space-y-4">
+                {[1, 2, 3].map(n => (
+                  <div key={n} class="h-16 bg-slate-900 animate-pulse rounded-xl"></div>
+                ))}
+              </div>
+            ) : (!data?.risks || data.risks.length === 0) ? (
               <div class="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl text-center">
                 <span class="text-xs font-bold text-emerald-400 block mb-1">No Insights Available</span>
                 <p class="text-[10px] text-slate-500">All data parameters must be verified to display strategic insights.</p>
@@ -172,41 +213,63 @@ export default function Strategic({ token, selectedYear, activeTab }) {
             ) : (
               data.risks.map((r, i) => {
                 const riskTitle = r.title || 'Strategic Insight';
-                const riskStatus = r.status || 'Needs Review';
+                // Fix NO RISK status formatting
+                let riskStatus = (r.status || 'Needs Review').toUpperCase();
+                if (riskStatus.includes('LOW') || riskStatus.includes('NO RISK') || riskStatus.includes('NONE')) {
+                  riskStatus = 'NO RISK';
+                }
                 const riskMeaning = r.meaning || 'This area needs further review.';
                 const riskReason = r.reason || 'Insufficient data available for detailed explanation.';
                 const riskAction = r.action || 'Review operational records and update the risk rule.';
+                const isExpanded = !!expandedRisks[i];
 
-                const bgClass = riskStatus.includes('High') 
+                const bgClass = riskStatus.includes('HIGH') || riskStatus.includes('CRITICAL')
                   ? 'bg-red-950/10 border-red-900/30 text-red-200 glow-red' 
-                  : riskStatus.includes('Medium') 
+                  : riskStatus.includes('MEDIUM') 
                   ? 'bg-yellow-950/10 border-yellow-900/20 text-yellow-200' 
                   : 'bg-emerald-950/10 border-emerald-900/20 text-emerald-200';
                 
-                const borderClass = riskStatus.includes('High')
+                const borderClass = riskStatus.includes('HIGH') || riskStatus.includes('CRITICAL')
                   ? 'border-l-4 border-l-red-500'
-                  : riskStatus.includes('Medium')
+                  : riskStatus.includes('MEDIUM')
                   ? 'border-l-4 border-l-yellow-500'
                   : 'border-l-4 border-l-emerald-500';
 
                 return (
-                  <div key={i} class={`p-4 border rounded-xl flex flex-col gap-2 text-xs leading-relaxed ${bgClass} ${borderClass}`}>
+                  <div key={i} class={`p-4 border rounded-xl flex flex-col gap-2.5 text-xs leading-relaxed ${bgClass} ${borderClass}`}>
                     <div class="flex items-center justify-between">
                       <span class="font-bold text-slate-100">{riskTitle}</span>
                       <span class={`px-2 py-0.5 text-[9px] font-extrabold rounded uppercase ${
-                        riskStatus.includes('High') ? 'bg-red-500/20 text-red-400 border border-red-800/30' : riskStatus.includes('Medium') ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-800/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-800/30'
+                        riskStatus.includes('HIGH') || riskStatus.includes('CRITICAL') ? 'bg-red-500/20 text-red-400 border border-red-800/30' : riskStatus.includes('MEDIUM') ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-800/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-800/30'
                       }`}>
-                        Status: {riskStatus}
+                        {riskStatus}
                       </span>
                     </div>
-                    <div class="space-y-1 text-slate-300 font-medium text-[11px]">
-                      <p><strong>Evidence:</strong> {riskReason}</p>
-                      <p><strong>Business Impact:</strong> {riskMeaning}</p>
+
+                    <p class="text-slate-300 font-medium text-[11px] leading-normal">
+                      {riskMeaning}
+                    </p>
+
+                    <div class="flex justify-between items-center mt-1">
+                      <button
+                        onClick={() => setExpandedRisks(prev => ({ ...prev, [i]: !isExpanded }))}
+                        class="text-[10px] text-blue-400 hover:text-blue-300 font-bold transition-all focus:outline-none cursor-pointer"
+                      >
+                        {isExpanded ? 'Hide Details' : 'View Details'}
+                      </button>
                     </div>
-                    <div class="p-2.5 bg-slate-950/60 border border-slate-900 rounded-lg">
-                      <span class="text-[9px] text-blue-400 font-extrabold uppercase tracking-wide block mb-0.5">Recommendation</span>
-                      <p class="text-[11px] text-slate-200 leading-normal font-semibold">{riskAction}</p>
-                    </div>
+
+                    {isExpanded && (
+                      <div class="mt-2 space-y-3 pt-3 border-t border-slate-800/40 animate-fade-in">
+                        <div class="text-[10px] text-slate-400 space-y-1">
+                          <p><strong>Key Evidence:</strong> {riskReason}</p>
+                        </div>
+                        <div class="p-2.5 bg-slate-950/60 border border-slate-900 rounded-lg">
+                          <span class="text-[9px] text-blue-400 font-extrabold uppercase tracking-wide block mb-0.5">Recommendation</span>
+                          <p class="text-[11px] text-slate-200 leading-normal font-semibold">{riskAction}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -252,7 +315,9 @@ export default function Strategic({ token, selectedYear, activeTab }) {
               </p>
             )}
             <div class="h-80 text-xs flex items-center justify-center">
-              {expData.length > 0 ? (
+              {loading || !data ? (
+                <div class="h-full w-full bg-slate-900 animate-pulse rounded-xl"></div>
+              ) : expData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart key={`exp_${selectedYear}_${activeTab}_${viewMode}`} data={expData} margin={{ top: 10, right: 10, left: -20, bottom: viewMode === 'granular' ? 65 : 20 }}>
                     <defs>
@@ -273,9 +338,31 @@ export default function Strategic({ token, selectedYear, activeTab }) {
                     />
                     <YAxis stroke="#64748b" tickFormatter={(v) => `${v}%`} tick={{ fontSize: 10, fill: '#94a3b8' }} />
                     <Tooltip 
-                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
-                      itemStyle={{ color: '#fff' }}
-                      formatter={(value) => [`+${value.toFixed(2)}%`, 'Growth']}
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const item = payload[0].payload;
+                          return (
+                            <div class="p-4 bg-slate-950/95 border border-slate-800 rounded-xl space-y-1.5 text-xs text-slate-300 shadow-xl leading-normal">
+                              <p class="font-bold text-white mb-1">{label}</p>
+                              <p class="flex justify-between gap-6">
+                                <span>Growth Rate:</span>
+                                <span class="font-bold text-emerald-400">
+                                  {item.isNew ? 'New / Emerging' : `+${item.growthRate.toFixed(2)}%`}
+                                </span>
+                              </p>
+                              <p class="flex justify-between gap-6">
+                                <span>Previous Revenue:</span>
+                                <span class="font-bold text-slate-400">{formatCurrency(item.previousRevenue)}</span>
+                              </p>
+                              <p class="flex justify-between gap-6">
+                                <span>Latest Revenue:</span>
+                                <span class="font-bold text-white">{formatCurrency(item.latestRevenue)}</span>
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
                     />
                     <Bar 
                       dataKey="growthRate" 
@@ -308,7 +395,9 @@ export default function Strategic({ token, selectedYear, activeTab }) {
               </p>
             )}
             <div class="h-80 text-xs flex items-center justify-center">
-              {decData.length > 0 ? (
+              {loading || !data ? (
+                <div class="h-full w-full bg-slate-900 animate-pulse rounded-xl"></div>
+              ) : decData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart key={`dec_${selectedYear}_${activeTab}_${viewMode}`} data={decData} margin={{ top: 10, right: 10, left: -20, bottom: viewMode === 'granular' ? 65 : 20 }}>
                     <defs>
@@ -329,9 +418,31 @@ export default function Strategic({ token, selectedYear, activeTab }) {
                     />
                     <YAxis stroke="#64748b" tickFormatter={(v) => `${Math.abs(v)}%`} tick={{ fontSize: 10, fill: '#94a3b8' }} />
                     <Tooltip 
-                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
-                      itemStyle={{ color: '#fff' }}
-                      formatter={(value) => [`${value.toFixed(2)}%`, 'Decline']}
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const item = payload[0].payload;
+                          return (
+                            <div class="p-4 bg-slate-950/95 border border-slate-800 rounded-xl space-y-1.5 text-xs text-slate-300 shadow-xl leading-normal">
+                              <p class="font-bold text-white mb-1">{label}</p>
+                              <p class="flex justify-between gap-6">
+                                <span>Decline Rate:</span>
+                                <span class="font-bold text-rose-400">
+                                  {item.growthRate.toFixed(2)}%
+                                </span>
+                              </p>
+                              <p class="flex justify-between gap-6">
+                                <span>Previous Revenue:</span>
+                                <span class="font-bold text-slate-400">{formatCurrency(item.previousRevenue)}</span>
+                              </p>
+                              <p class="flex justify-between gap-6">
+                                <span>Latest Revenue:</span>
+                                <span class="font-bold text-white">{formatCurrency(item.latestRevenue)}</span>
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
                     />
                     <ReferenceLine y={0} stroke="#475569" strokeWidth={1} />
                     <Bar 
@@ -371,13 +482,13 @@ export default function Strategic({ token, selectedYear, activeTab }) {
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-800/40 text-slate-300">
-              {data?.commodityGrowth.map((cg, idx) => (
+              {!loading && data?.commodityGrowth?.map((cg, idx) => (
                 <tr key={idx} class="hover:bg-slate-900/10">
                   <td class="py-2 px-3 text-slate-200 font-bold">{cg.name}</td>
                   <td class="py-2 px-3 text-right">{formatCurrency(cg.previousRevenue)}</td>
                   <td class="py-2 px-3 text-right">{formatCurrency(cg.latestRevenue)}</td>
-                  <td class={`py-2 px-3 text-right font-bold ${cg.growthRate > 0 ? 'text-emerald-400' : cg.growthRate < 0 ? 'text-rose-400' : 'text-slate-400'}`}>
-                    {cg.growthRate >= 0 ? '+' : ''}{cg.growthRate.toFixed(2)}%
+                  <td class={`py-2 px-3 text-right font-bold ${cg.isNew ? 'text-emerald-400' : cg.growthRate > 0 ? 'text-emerald-400' : cg.growthRate < 0 ? 'text-rose-400' : 'text-slate-400'}`}>
+                    {cg.isNew ? 'New / Emerging' : `${cg.growthRate >= 0 ? '+' : ''}${cg.growthRate.toFixed(2)}%`}
                   </td>
                 </tr>
               ))}

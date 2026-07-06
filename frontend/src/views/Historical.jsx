@@ -13,8 +13,14 @@ export default function Historical({ token, selectedYear, activeTab }) {
   const [customers, setCustomers] = useState([]);
   const [berths, setBerths] = useState([]);
   const [commodities, setCommodities] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [loadingTrends, setLoadingTrends] = useState(true);
+  const [loadingCustomers, setLoadingCustomers] = useState(true);
+  const [loadingBerths, setLoadingBerths] = useState(true);
+  const [loadingCommodities, setLoadingCommodities] = useState(true);
+  const [errorTrends, setErrorTrends] = useState('');
+  const [errorCustomers, setErrorCustomers] = useState('');
+  const [errorBerths, setErrorBerths] = useState('');
+  const [errorCommodities, setErrorCommodities] = useState('');
   const [yearFilterRange, setYearFilterRange] = useState([2016, 2025]);
   const [selectedBerth, setSelectedBerth] = useState('All');
   const fetchingRef = useRef(false);
@@ -22,40 +28,57 @@ export default function Historical({ token, selectedYear, activeTab }) {
   const fetchHistoricalData = useCallback(async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
-    setLoading(true);
-    setError('');
-    try {
-      const config = { headers: { Authorization: `Bearer ${token}` } };
-      // Use Promise.allSettled so a single slow/failed API does not block all charts
-      const [trendsRes, custRes, berthRes, commRes] = await Promise.allSettled([
-        axios.get(`/api/historical/trends?year=${selectedYear}`, config),
-        axios.get(`/api/historical/customers?year=${selectedYear}`, config),
-        axios.get(`/api/historical/berths?year=${selectedYear}`, config),
-        axios.get(`/api/historical/commodities?year=${selectedYear}`, config)
-      ]);
+    setLoadingTrends(true);
+    setLoadingCustomers(true);
+    setLoadingBerths(true);
+    setLoadingCommodities(true);
+    setErrorTrends('');
+    setErrorCustomers('');
+    setErrorBerths('');
+    setErrorCommodities('');
 
-      if (trendsRes.status === 'fulfilled') {
-        const d = trendsRes.value.data;
-        console.log('Historical trends API response:', d);
+    const config = { headers: { Authorization: `Bearer ${token}` } };
+
+    axios.get(`/api/historical/trends?year=${selectedYear}`, config)
+      .then(res => {
+        const d = res.data;
         setTrends(d || { yearly: [], monthly: [] });
         const yrList = (d?.yearly || []).map(t => parseInt(t.year)).filter(y => !isNaN(y));
         if (yrList.length > 0) {
           setYearFilterRange([Math.min(...yrList), Math.max(...yrList)]);
         }
-      }
-      if (custRes.status === 'fulfilled') setCustomers(custRes.value.data || []);
-      if (berthRes.status === 'fulfilled') setBerths(berthRes.value.data || []);
-      if (commRes.status === 'fulfilled') setCommodities(commRes.value.data || []);
+      })
+      .catch(err => {
+        console.error(err);
+        setErrorTrends('Failed to fetch revenue trends.');
+      })
+      .finally(() => setLoadingTrends(false));
 
-      const anyFailed = [trendsRes, custRes, berthRes, commRes].some(r => r.status === 'rejected');
-      if (anyFailed) setError('Some data sections could not be loaded.');
-    } catch (err) {
-      console.error(err);
-      setError('Failed to fetch historical analytics data.');
-    } finally {
-      setLoading(false);
-      fetchingRef.current = false;
-    }
+    axios.get(`/api/historical/customers?year=${selectedYear}`, config)
+      .then(res => setCustomers(res.data || []))
+      .catch(err => {
+        console.error(err);
+        setErrorCustomers('Failed to fetch customer shares.');
+      })
+      .finally(() => setLoadingCustomers(false));
+
+    axios.get(`/api/historical/berths?year=${selectedYear}`, config)
+      .then(res => setBerths(res.data || []))
+      .catch(err => {
+        console.error(err);
+        setErrorBerths('Failed to fetch berth traffic.');
+      })
+      .finally(() => setLoadingBerths(false));
+
+    axios.get(`/api/historical/commodities?year=${selectedYear}`, config)
+      .then(res => setCommodities(res.data || []))
+      .catch(err => {
+        console.error(err);
+        setErrorCommodities('Failed to fetch commodity distribution.');
+      })
+      .finally(() => setLoadingCommodities(false));
+
+    fetchingRef.current = false;
   }, [token, selectedYear]);
 
   useEffect(() => {
@@ -73,22 +96,6 @@ export default function Historical({ token, selectedYear, activeTab }) {
     return () => window.removeEventListener('psidss-data-updated', handler);
   }, [fetchHistoricalData]);
 
-  if (loading) {
-    return (
-      <div class="flex items-center justify-center h-96">
-        <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div class="p-4 bg-red-950/30 border border-red-900/40 rounded-xl text-red-300 flex items-center gap-2 max-w-xl mx-auto my-12">
-        <AlertCircle class="h-5 w-5" />
-        <span>{error}</span>
-      </div>
-    );
-  }
 
   const filteredYearlyTrends = trends.yearly.filter(t => {
     const y = parseInt(t.year);
@@ -174,7 +181,13 @@ export default function Historical({ token, selectedYear, activeTab }) {
           </div>
           <div>
             <span class="text-xs text-slate-500 uppercase font-semibold tracking-wider">Filtered Revenue</span>
-            <h4 class="text-xl font-bold text-white font-display mt-0.5">{formatCurrency(totalRevenue)}</h4>
+            <h4 class="text-xl font-bold text-white font-display mt-0.5">
+              {loadingTrends ? (
+                <span class="inline-block w-24 h-6 bg-slate-900 animate-pulse rounded"></span>
+              ) : (
+                formatCurrency(totalRevenue)
+              )}
+            </h4>
           </div>
         </div>
 
@@ -184,19 +197,30 @@ export default function Historical({ token, selectedYear, activeTab }) {
           </div>
           <div>
             <span class="text-xs text-slate-500 uppercase font-semibold tracking-wider">Average YoY Growth</span>
-            <h4 class="text-xl font-bold text-emerald-400 font-display mt-0.5">{avgGrowth.toFixed(2)}%</h4>
-            {filteredYearlyTrends.length >= 2 && (
-              <span class="text-[10px] text-slate-400 block mt-0.5">
-                CAGR: {(() => {
-                  const first = filteredYearlyTrends[0].revenue;
-                  const last = filteredYearlyTrends[filteredYearlyTrends.length - 1].revenue;
-                  const n = filteredYearlyTrends.length - 1;
-                  if (first > 0 && n > 0) {
-                    return `${((Math.pow(last / first, 1 / n) - 1) * 100).toFixed(2)}%`;
-                  }
-                  return '0.00%';
-                })()}
-              </span>
+            {loadingTrends ? (
+              <span class="inline-block w-24 h-6 bg-slate-900 animate-pulse rounded mt-0.5"></span>
+            ) : filteredYearlyTrends.length >= 2 ? (
+              <>
+                <h4 class="text-xl font-bold text-emerald-400 font-display mt-0.5">{avgGrowth.toFixed(2)}%</h4>
+                <span class="text-[10px] text-slate-400 block mt-0.5">
+                  CAGR: {(() => {
+                    const first = filteredYearlyTrends[0].revenue;
+                    const last = filteredYearlyTrends[filteredYearlyTrends.length - 1].revenue;
+                    const n = filteredYearlyTrends.length - 1;
+                    if (first > 0 && n > 0) {
+                      return `${((Math.pow(last / first, 1 / n) - 1) * 100).toFixed(2)}%`;
+                    }
+                    return '0.00%';
+                  })()}
+                </span>
+              </>
+            ) : (
+              <>
+                <h4 class="text-xl font-bold text-slate-400 font-display mt-0.5">N/A</h4>
+                <span class="text-[10px] text-slate-500 block mt-0.5">
+                  N/A — needs at least two fiscal years
+                </span>
+              </>
             )}
           </div>
         </div>
@@ -207,7 +231,13 @@ export default function Historical({ token, selectedYear, activeTab }) {
           </div>
           <div>
             <span class="text-xs text-slate-500 uppercase font-semibold tracking-wider">Fiscal Years Count</span>
-            <h4 class="text-xl font-bold text-white font-display mt-0.5">{filteredYearlyTrends.length} Fiscal Years</h4>
+            <h4 class="text-xl font-bold text-white font-display mt-0.5">
+              {loadingTrends ? (
+                <span class="inline-block w-24 h-6 bg-slate-900 animate-pulse rounded"></span>
+              ) : (
+                `${filteredYearlyTrends.length} Fiscal Years`
+              )}
+            </h4>
           </div>
         </div>
       </div>
@@ -219,27 +249,60 @@ export default function Historical({ token, selectedYear, activeTab }) {
         <div class="lg:col-span-2 p-6 rounded-2xl glass-panel space-y-4 glow-blue">
           <h4 class="text-base font-bold text-white">Year-over-Year Revenue Trend</h4>
           <div class="h-72 w-full text-xs">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart key={`${selectedYear}_${activeTab}`} data={filteredYearlyTrends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25}/>
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="year" stroke="#64748b" tickFormatter={formatXAxisYear} />
-                <YAxis stroke="#64748b" tickFormatter={(v) => `₹${(v / 1.0e7).toFixed(1)} Cr`} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
-                  itemStyle={{ color: '#fff' }}
-                  formatter={(value) => [formatCurrency(value), 'Revenue']}
-                  labelStyle={{ color: '#fff', fontWeight: 'bold' }}
-                  labelFormatter={formatFullYearRange}
-                />
-                <Area type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" isAnimationActive={true} animationDuration={1000} animationEasing="ease-in-out" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {loadingTrends ? (
+              <div class="h-full w-full flex items-center justify-center bg-slate-950/20 border border-slate-900 rounded-xl animate-pulse">
+                <span class="text-slate-500">Loading Revenue Trends...</span>
+              </div>
+            ) : errorTrends ? (
+              <div class="h-full w-full flex items-center justify-center border border-red-950/30 bg-red-950/5 text-red-400 rounded-xl p-4">
+                <AlertCircle class="h-5 w-5 mr-2 shrink-0" />
+                <span>{errorTrends}</span>
+              </div>
+            ) : filteredYearlyTrends.length >= 2 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart key={`${selectedYear}_${activeTab}`} data={filteredYearlyTrends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25}/>
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="year" stroke="#64748b" tickFormatter={formatXAxisYear} />
+                  <YAxis stroke="#64748b" tickFormatter={(v) => `₹${(v / 1.0e7).toFixed(1)} Cr`} />
+                  <Tooltip 
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <div class="p-4 bg-slate-950/95 border border-slate-800 rounded-xl space-y-1.5 text-xs text-slate-300 shadow-xl leading-normal">
+                            <p class="font-bold text-white mb-1">Fiscal Year {formatFullYearRange(label)}</p>
+                            <p class="flex justify-between gap-6">
+                              <span>Revenue:</span>
+                              <span class="font-bold text-white">{formatCurrency(data.revenue)}</span>
+                            </p>
+                            {data.growthRate !== undefined && (
+                              <p class="flex justify-between gap-6">
+                                <span>YoY Growth:</span>
+                                <span class={`font-bold ${data.growthRate >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                  {data.growthRate >= 0 ? '+' : ''}{data.growthRate}%
+                                </span>
+                              </p>
+                            )}
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Area type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" isAnimationActive={true} animationDuration={1000} animationEasing="ease-in-out" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div class="h-full w-full flex items-center justify-center border border-slate-900 rounded-xl text-center p-4">
+                <span class="text-slate-500 font-medium">YoY trend requires at least two fiscal years. Select multiple years to view trend.</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -247,35 +310,46 @@ export default function Historical({ token, selectedYear, activeTab }) {
         <div class="p-6 rounded-2xl glass-panel space-y-4 glow-violet">
           <h4 class="text-base font-bold text-white">Customer Revenue Share</h4>
           <div class="h-60 w-full flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart key={`${selectedYear}_${activeTab}`}>
-                <Pie
-                  data={customers}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={3}
-                  dataKey="value"
-                  isAnimationActive={true}
-                  animationDuration={1000}
-                  animationEasing="ease-in-out"
-                >
-                  {customers.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
-                  itemStyle={{ color: '#fff' }}
-                  formatter={(value, name, props) => [`${formatCurrency(value)} (${props.payload.percentage}%)`, props.payload.name]}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            {loadingCustomers ? (
+              <div class="h-full w-full flex items-center justify-center bg-slate-950/20 border border-slate-900 rounded-xl animate-pulse">
+                <span class="text-slate-500">Loading Customer Shares...</span>
+              </div>
+            ) : errorCustomers ? (
+              <div class="h-full w-full flex items-center justify-center border border-red-950/30 bg-red-950/5 text-red-400 rounded-xl p-4">
+                <AlertCircle class="h-5 w-5 mr-2 shrink-0" />
+                <span>{errorCustomers}</span>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart key={`${selectedYear}_${activeTab}`}>
+                  <Pie
+                    data={customers}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={3}
+                    dataKey="value"
+                    isAnimationActive={true}
+                    animationDuration={1000}
+                    animationEasing="ease-in-out"
+                  >
+                    {customers.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
+                    itemStyle={{ color: '#fff' }}
+                    formatter={(value, name, props) => [`${formatCurrency(value)} (${props.payload.percentage}%)`, props.payload.name]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
           </div>
           {/* Custom Legends list */}
           <div class="flex flex-col gap-1.5 max-h-24 overflow-y-auto pr-1 text-[10px] text-slate-400">
-            {customers.map((c, i) => (
+            {!loadingCustomers && !errorCustomers && customers.map((c, i) => (
               <div key={c.name} class="flex items-center justify-between">
                 <div class="flex items-center gap-1.5 truncate">
                   <span class="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>
@@ -300,6 +374,7 @@ export default function Historical({ token, selectedYear, activeTab }) {
               value={selectedBerth}
               onChange={(e) => setSelectedBerth(e.target.value)}
               class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-300 focus:outline-none"
+              disabled={loadingBerths || !!errorBerths}
             >
               <option value="All">All Docks</option>
               {berths.map(b => (
@@ -309,7 +384,16 @@ export default function Historical({ token, selectedYear, activeTab }) {
           </div>
 
           <div class="h-72 w-full text-xs">
-            {selectedBerth === 'All' ? (
+            {loadingBerths ? (
+              <div class="h-full w-full flex items-center justify-center bg-slate-950/20 border border-slate-900 rounded-xl animate-pulse">
+                <span class="text-slate-500">Loading Berth Traffic...</span>
+              </div>
+            ) : errorBerths ? (
+              <div class="h-full w-full flex items-center justify-center border border-red-950/30 bg-red-950/5 text-red-400 rounded-xl p-4">
+                <AlertCircle class="h-5 w-5 mr-2 shrink-0" />
+                <span>{errorBerths}</span>
+              </div>
+            ) : selectedBerth === 'All' ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart key={`${selectedYear}_${activeTab}`} data={berths}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
@@ -369,19 +453,30 @@ export default function Historical({ token, selectedYear, activeTab }) {
         <div class="p-6 rounded-2xl glass-panel space-y-4">
           <h4 class="text-base font-bold text-white">Commodity Group Revenue Distribution</h4>
           <div class="h-72 w-full text-xs">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart key={`${selectedYear}_${activeTab}`} data={commodities} layout="vertical" margin={{ left: 10, right: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis type="number" stroke="#64748b" tickFormatter={(v) => `₹${(v / 1.0e7).toFixed(1)} Cr`} />
-                <YAxis dataKey="name" type="category" stroke="#64748b" width={90} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
-                  itemStyle={{ color: '#fff' }}
-                  formatter={(value) => [formatCurrency(value), 'Revenue']}
-                />
-                <Bar dataKey="value" name="Revenue" fill="#8b5cf6" radius={[0, 4, 4, 0]} isAnimationActive={true} animationDuration={1000} animationEasing="ease-in-out" />
-              </BarChart>
-            </ResponsiveContainer>
+            {loadingCommodities ? (
+              <div class="h-full w-full flex items-center justify-center bg-slate-950/20 border border-slate-900 rounded-xl animate-pulse">
+                <span class="text-slate-500">Loading Commodities...</span>
+              </div>
+            ) : errorCommodities ? (
+              <div class="h-full w-full flex items-center justify-center border border-red-950/30 bg-red-950/5 text-red-400 rounded-xl p-4">
+                <AlertCircle class="h-5 w-5 mr-2 shrink-0" />
+                <span>{errorCommodities}</span>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart key={`${selectedYear}_${activeTab}`} data={commodities} layout="vertical" margin={{ left: 10, right: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis type="number" stroke="#64748b" tickFormatter={(v) => `₹${(v / 1.0e7).toFixed(1)} Cr`} />
+                  <YAxis dataKey="name" type="category" stroke="#64748b" width={90} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
+                    itemStyle={{ color: '#fff' }}
+                    formatter={(value) => [formatCurrency(value), 'Revenue']}
+                  />
+                  <Bar dataKey="value" name="Revenue" fill="#8b5cf6" radius={[0, 4, 4, 0]} isAnimationActive={true} animationDuration={1000} animationEasing="ease-in-out" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 

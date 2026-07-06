@@ -266,6 +266,12 @@ const strategicController = {
         }
       }
 
+      const replacementsWithYears = {
+        ...replacements,
+        prevYear,
+        latestYear
+      };
+
       const commodityRevenues = await sequelize.query(`
         SELECT 
           commodity_group,
@@ -274,9 +280,10 @@ const strategicController = {
           SUM(invoice_amount) as revenue
         FROM PortRecords
         WHERE commodity IS NOT NULL 
-          AND commodity != ""${scopeClause}
+          AND commodity != ""
+          AND source_year IN (:prevYear, :latestYear)${scopeClause}
         GROUP BY commodity_group, commodity, source_year
-      `, { type: QueryTypes.SELECT, replacements });
+      `, { type: QueryTypes.SELECT, replacements: replacementsWithYears });
 
       const pivot = {};
       const groupPivot = {};
@@ -402,6 +409,9 @@ const strategicController = {
         risk: 'Revenue Concentration',
         name: 'Revenue Concentration',
         status: concentrationStatus,
+        level: concentrationStatus,
+        category: 'Revenue Concentration',
+        message: `Top customer revenue share is ${topCustomerShare.toFixed(2)}% and Top 5 customer revenue share is ${top5CustomerShare.toFixed(2)}%.`,
         meaning: 'Indicates how dependent the port is on a few major customers.',
         reason: `Top customer revenue share is ${topCustomerShare.toFixed(2)}% and Top 5 customer revenue share is ${top5CustomerShare.toFixed(2)}%.`,
         action: concentrationAction
@@ -472,9 +482,12 @@ const strategicController = {
         risk: 'Customer Performance',
         name: 'Customer Performance',
         status: customerStatus,
+        level: customerStatus,
+        category: 'Customer Performance',
+        message: `Top growing customer is '${topGrower}' (+${formatCurrency(topGrowerDiff)}) and highest declining customer is '${topDecliner}' (${topDeclinerDiff < 0 ? '-' : ''}${formatCurrency(Math.abs(topDeclinerDiff))}).`,
         meaning: 'Shows whether the customer base is expanding or contracting.',
         reason: `Top growing customer is '${topGrower}' (+${formatCurrency(topGrowerDiff)}) and highest declining customer is '${topDecliner}' (${topDeclinerDiff < 0 ? '-' : ''}${formatCurrency(Math.abs(topDeclinerDiff))}).`,
-        action: 'Retain declining customers and strengthen relationships with growing customers.'
+        action: 'Review customers with sharp revenue decline and plan follow-up actions.'
       });
 
       // Card 3: Berth Performance
@@ -516,9 +529,12 @@ const strategicController = {
         risk: 'Berth Performance',
         name: 'Berth Performance',
         status: berthStatus,
+        level: berthStatus,
+        category: 'Berth Performance',
+        message: `Top performing berth is '${topBerthName}' (${formatCurrency(topBerthRevenue)} across ${topBerthTransactions} transactions). Lowest performing berth is '${lowestBerthName}' (${formatCurrency(lowestBerthRevenue)} across ${lowestBerthTransactions} transactions).`,
         meaning: 'Shows which berths contribute most and least to port revenue.',
         reason: `Top performing berth is '${topBerthName}' (${formatCurrency(topBerthRevenue)} across ${topBerthTransactions} transactions). Lowest performing berth is '${lowestBerthName}' (${formatCurrency(lowestBerthRevenue)} across ${lowestBerthTransactions} transactions).`,
-        action: 'Review utilisation of low-performing berths and continue supporting high-performing berths.'
+        action: 'Continue monitoring berth-wise revenue share.'
       });
 
       // Card 4: Revenue Trend
@@ -577,9 +593,28 @@ const strategicController = {
         risk: 'Revenue Trend',
         name: 'Revenue Trend',
         status: growthStatus,
+        level: growthStatus,
+        category: 'Revenue Trend',
+        message: `Overall Revenue Growth is ${overallGrowth.toFixed(2)}% with a CAGR of ${cagr.toFixed(2)}%. Highest growth FY is ${fastestYear} (+${fastestGrowth.toFixed(1)}% YoY) and lowest growth FY is ${slowestYear} (${slowestGrowth >= 0 ? '+' : ''}${slowestGrowth.toFixed(1)}% YoY).`,
         meaning: 'Summarise long-term financial performance.',
         reason: `Overall Revenue Growth is ${overallGrowth.toFixed(2)}% with a CAGR of ${cagr.toFixed(2)}%. Highest growth FY is ${fastestYear} (+${fastestGrowth.toFixed(1)}% YoY) and lowest growth FY is ${slowestYear} (${slowestGrowth >= 0 ? '+' : ''}${slowestGrowth.toFixed(1)}% YoY).`,
-        action: 'Maintain growth momentum while investigating years with lower growth.'
+        action: 'Monitor forecast changes monthly and compare with actual revenue.'
+      });
+
+      // Card 5: Commodity Decline
+      const hasDecline = commodityGrowth.some(c => c.growthRate < 0);
+      const commodityDeclineStatus = hasDecline ? 'High' : 'No Risk';
+      risks.push({
+        title: 'Commodity Decline',
+        risk: 'Commodity Decline',
+        name: 'Commodity Decline',
+        status: commodityDeclineStatus,
+        level: commodityDeclineStatus,
+        category: 'Commodity Decline',
+        message: commodityDeclineStatus === 'High' ? 'One or more commodities show negative growth rate.' : 'All major commodities are stable or growing.',
+        meaning: 'Shows whether major cargo groups are contracting in revenue.',
+        reason: commodityDeclineStatus === 'High' ? 'One or more commodities show negative growth rate.' : 'All major commodities are stable or growing.',
+        action: 'Track declining commodities and compare with commodity group performance.'
       });
 
       const responseData = {

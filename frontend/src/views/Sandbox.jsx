@@ -377,7 +377,7 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
             <div class="h-80 w-full text-xs">
               {(!simulationData || !projectionData || projectionData.length === 0) ? (
                 <p class="text-slate-400 text-center py-20 border border-slate-900 rounded-xl">
-                  No simulation data available for selected filter scope.
+                  No simulation chart data available.
                 </p>
               ) : (() => {
                 // Temporary debug logs as requested

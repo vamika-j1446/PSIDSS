@@ -13,57 +13,33 @@ const historicalController = {
       const year = req.query.year || 'All';
       let cacheKey = `historical_trends_${year}`;
       if (req.user) {
-        if (req.user.role === 'Party' && req.user.party_name) {
-          cacheKey += `_party_${req.user.party_name}`;
-        } else if (req.user.role === 'VCN' && req.user.vcn) {
-          cacheKey += `_vcn_${req.user.vcn}`;
-        }
+        if (req.user.role === 'Party' && req.user.party_name) cacheKey += `_party_${req.user.party_name}`;
+        else if (req.user.role === 'VCN' && req.user.vcn) cacheKey += `_vcn_${req.user.vcn}`;
       }
       const cached = cache.get(cacheKey);
-      if (cached) {
-        return res.json(cached);
-      }
+      if (cached) return res.json(cached);
 
-      console.time("historical-api");
-      const f1_yearly = getYearFilter(req, true, '', false); // ignoreYear = false (respect selected scope)
-      const f1_monthly = getYearFilter(req, true, '', false); // ignoreYear = false
+      const timerLabel = `historical-trends-${year}-${Date.now()}`;
+      console.time(timerLabel);
+
+      const f1_yearly = getYearFilter(req, true, '', false);
+      const f1_monthly = getYearFilter(req, true, '', false);
+
       let sqlYearly, sqlMonthly;
       if (DB_TYPE === 'mysql') {
-        sqlYearly = `
-          SELECT source_year as label, SUM(invoice_amount) as revenue
-          FROM PortRecords
-          WHERE source_year IS NOT NULL AND source_year > 0${f1_yearly.clause}
-          GROUP BY source_year
-          ORDER BY source_year ASC
-        `;
-        sqlMonthly = `
-          SELECT DATE_FORMAT(invoice_date, '%Y-%m') as label, SUM(invoice_amount) as revenue
-          FROM PortRecords
-          WHERE invoice_date IS NOT NULL${f1_monthly.clause}
-          GROUP BY label
-          ORDER BY label ASC
-        `;
+        sqlYearly = `SELECT source_year as label, SUM(invoice_amount) as revenue FROM PortRecords WHERE source_year IS NOT NULL AND source_year > 0${f1_yearly.clause} GROUP BY source_year ORDER BY source_year ASC`;
+        sqlMonthly = `SELECT DATE_FORMAT(invoice_date, '%Y-%m') as label, SUM(invoice_amount) as revenue FROM PortRecords WHERE invoice_date IS NOT NULL${f1_monthly.clause} GROUP BY label ORDER BY label ASC`;
       } else {
-        sqlYearly = `
-          SELECT source_year as label, SUM(invoice_amount) as revenue
-          FROM PortRecords
-          WHERE source_year IS NOT NULL AND source_year > 0${f1_yearly.clause}
-          GROUP BY source_year
-          ORDER BY source_year ASC
-        `;
-        sqlMonthly = `
-          SELECT strftime('%Y-%m', invoice_date) as label, SUM(invoice_amount) as revenue
-          FROM PortRecords
-          WHERE invoice_date IS NOT NULL${f1_monthly.clause}
-          GROUP BY label
-          ORDER BY label ASC
-        `;
+        sqlYearly = `SELECT source_year as label, SUM(invoice_amount) as revenue FROM PortRecords WHERE source_year IS NOT NULL AND source_year > 0${f1_yearly.clause} GROUP BY source_year ORDER BY source_year ASC`;
+        sqlMonthly = `SELECT strftime('%Y-%m', invoice_date) as label, SUM(invoice_amount) as revenue FROM PortRecords WHERE invoice_date IS NOT NULL${f1_monthly.clause} GROUP BY label ORDER BY label ASC`;
       }
 
-      const yearlyData = await sequelize.query(sqlYearly, { type: QueryTypes.SELECT, replacements: f1_yearly.replacements });
-      const monthlyData = await sequelize.query(sqlMonthly, { type: QueryTypes.SELECT, replacements: f1_monthly.replacements });
+      // Run both queries in parallel
+      const [yearlyData, monthlyData] = await Promise.all([
+        sequelize.query(sqlYearly, { type: QueryTypes.SELECT, replacements: f1_yearly.replacements }),
+        sequelize.query(sqlMonthly, { type: QueryTypes.SELECT, replacements: f1_monthly.replacements })
+      ]);
 
-      // Calculate CAGR and Growth rates
       const trends = yearlyData.map((d, index) => {
         const currentRev = parseFloat(d.revenue) || 0;
         let growth = 0;
@@ -71,27 +47,19 @@ const historicalController = {
           const prevRev = parseFloat(yearlyData[index - 1].revenue) || 0;
           growth = prevRev > 0 ? ((currentRev - prevRev) / prevRev) * 100 : 0;
         }
-        return {
-          year: d.label,
-          revenue: currentRev,
-          growthRate: parseFloat(growth.toFixed(2))
-        };
+        return { year: d.label, revenue: currentRev, growthRate: parseFloat(growth.toFixed(2)) };
       });
 
       const responseData = {
         yearly: trends,
-        monthly: monthlyData.map(d => ({
-          month: d.label,
-          revenue: parseFloat(d.revenue) || 0
-        }))
+        monthly: monthlyData.map(d => ({ month: d.label, revenue: parseFloat(d.revenue) || 0 }))
       };
 
       cache.set(cacheKey, responseData);
-      console.timeEnd("historical-api");
+      console.timeEnd(timerLabel);
       res.json(responseData);
     } catch (error) {
-      console.timeEnd("historical-api");
-      console.error(error);
+      console.error('historical-trends error:', error.message);
       res.status(500).json({ error: 'Failed to retrieve historical revenue trends' });
     }
   },
@@ -102,50 +70,41 @@ const historicalController = {
       const year = req.query.year || 'All';
       let cacheKey = `historical_customers_${year}`;
       if (req.user) {
-        if (req.user.role === 'Party' && req.user.party_name) {
-          cacheKey += `_party_${req.user.party_name}`;
-        } else if (req.user.role === 'VCN' && req.user.vcn) {
-          cacheKey += `_vcn_${req.user.vcn}`;
-        }
+        if (req.user.role === 'Party' && req.user.party_name) cacheKey += `_party_${req.user.party_name}`;
+        else if (req.user.role === 'VCN' && req.user.vcn) cacheKey += `_vcn_${req.user.vcn}`;
       }
       const cached = cache.get(cacheKey);
-      if (cached) {
-        return res.json(cached);
-      }
+      if (cached) return res.json(cached);
 
-      console.time("historical-api");
-      const f1 = getYearFilter(req, true); // hasWhereAlready = true
-      const f2 = getYearFilter(req, false); // hasWhereAlready = false
+      const timerLabel = `historical-customers-${year}-${Date.now()}`;
+      console.time(timerLabel);
 
-      const topCustomers = await sequelize.query(`
-        SELECT party_name as name, SUM(invoice_amount) as value
-        FROM PortRecords
-        WHERE party_name IS NOT NULL AND party_name != ""${f1.clause}
-        GROUP BY party_name
-        ORDER BY value DESC
-        LIMIT 10
-      `, { type: QueryTypes.SELECT, replacements: f1.replacements });
+      const f1 = getYearFilter(req, true);
+      const f2 = getYearFilter(req, false);
 
-      const sumResult = await sequelize.query(`
-        SELECT SUM(invoice_amount) as total FROM PortRecords${f2.clause}
-      `, { type: QueryTypes.SELECT, replacements: f2.replacements });
+      // Run both queries in parallel
+      const [topCustomers, sumResult] = await Promise.all([
+        sequelize.query(
+          `SELECT party_name as name, SUM(invoice_amount) as value FROM PortRecords WHERE party_name IS NOT NULL AND party_name != ""${f1.clause} GROUP BY party_name ORDER BY value DESC LIMIT 10`,
+          { type: QueryTypes.SELECT, replacements: f1.replacements }
+        ),
+        sequelize.query(
+          `SELECT SUM(invoice_amount) as total FROM PortRecords${f2.clause}`,
+          { type: QueryTypes.SELECT, replacements: f2.replacements }
+        )
+      ]);
+
       const totalRevenue = parseFloat(sumResult[0].total) || 1.0;
-
       const formatted = topCustomers.map(c => {
         const val = parseFloat(c.value) || 0;
-        return {
-          name: c.name,
-          value: val,
-          percentage: parseFloat(((val / totalRevenue) * 100).toFixed(2))
-        };
+        return { name: c.name, value: val, percentage: parseFloat(((val / totalRevenue) * 100).toFixed(2)) };
       });
 
       cache.set(cacheKey, formatted);
-      console.timeEnd("historical-api");
+      console.timeEnd(timerLabel);
       res.json(formatted);
     } catch (error) {
-      console.timeEnd("historical-api");
-      console.error(error);
+      console.error('historical-customers error:', error.message);
       res.status(500).json({ error: 'Failed to retrieve customer revenue shares' });
     }
   },
@@ -156,31 +115,21 @@ const historicalController = {
       const year = req.query.year || 'All';
       let cacheKey = `historical_berths_${year}`;
       if (req.user) {
-        if (req.user.role === 'Party' && req.user.party_name) {
-          cacheKey += `_party_${req.user.party_name}`;
-        } else if (req.user.role === 'VCN' && req.user.vcn) {
-          cacheKey += `_vcn_${req.user.vcn}`;
-        }
+        if (req.user.role === 'Party' && req.user.party_name) cacheKey += `_party_${req.user.party_name}`;
+        else if (req.user.role === 'VCN' && req.user.vcn) cacheKey += `_vcn_${req.user.vcn}`;
       }
       const cached = cache.get(cacheKey);
-      if (cached) {
-        return res.json(cached);
-      }
+      if (cached) return res.json(cached);
 
-      console.time("historical-api");
-      const f1 = getYearFilter(req, true); // hasWhereAlready = true
+      const timerLabel = `historical-berths-${year}-${Date.now()}`;
+      console.time(timerLabel);
 
-      const berthData = await sequelize.query(`
-        SELECT 
-          berth, 
-          SUM(invoice_amount) as revenue,
-          COUNT(DISTINCT vcn) as vesselsCount,
-          SUM(grt) as totalGRT
-        FROM PortRecords
-        WHERE berth IS NOT NULL AND berth != ""${f1.clause}
-        GROUP BY berth
-        ORDER BY revenue DESC
-      `, { type: QueryTypes.SELECT, replacements: f1.replacements });
+      const f1 = getYearFilter(req, true);
+
+      const berthData = await sequelize.query(
+        `SELECT berth, SUM(invoice_amount) as revenue, COUNT(DISTINCT vcn) as vesselsCount, SUM(grt) as totalGRT FROM PortRecords WHERE berth IS NOT NULL AND berth != ""${f1.clause} GROUP BY berth ORDER BY revenue DESC`,
+        { type: QueryTypes.SELECT, replacements: f1.replacements }
+      );
 
       const formatted = berthData.map(b => ({
         berth: b.berth,
@@ -190,11 +139,10 @@ const historicalController = {
       }));
 
       cache.set(cacheKey, formatted);
-      console.timeEnd("historical-api");
+      console.timeEnd(timerLabel);
       res.json(formatted);
     } catch (error) {
-      console.timeEnd("historical-api");
-      console.error(error);
+      console.error('historical-berths error:', error.message);
       res.status(500).json({ error: 'Failed to retrieve berth traffic' });
     }
   },
@@ -205,35 +153,28 @@ const historicalController = {
       const year = req.query.year || 'All';
       let cacheKey = `historical_commodities_${year}`;
       if (req.user) {
-        if (req.user.role === 'Party' && req.user.party_name) {
-          cacheKey += `_party_${req.user.party_name}`;
-        } else if (req.user.role === 'VCN' && req.user.vcn) {
-          cacheKey += `_vcn_${req.user.vcn}`;
-        }
+        if (req.user.role === 'Party' && req.user.party_name) cacheKey += `_party_${req.user.party_name}`;
+        else if (req.user.role === 'VCN' && req.user.vcn) cacheKey += `_vcn_${req.user.vcn}`;
       }
       const cached = cache.get(cacheKey);
-      if (cached) {
-        return res.json(cached);
-      }
+      if (cached) return res.json(cached);
 
-      console.time("historical-api");
-      const f1 = getYearFilter(req, true); // hasWhereAlready = true
+      const timerLabel = `historical-commodities-${year}-${Date.now()}`;
+      console.time(timerLabel);
+
+      const f1 = getYearFilter(req, true);
 
       const query = `
         SELECT 
           CASE
-            WHEN UPPER(TRIM(commodity_group)) IN ('OTHER CARGO') THEN 'OTHER CARGO'
-            WHEN UPPER(TRIM(commodity_group)) IN ('PETROLEUM') THEN 'PETROLEUM'
+            WHEN UPPER(TRIM(commodity_group)) = 'OTHER CARGO' THEN 'OTHER CARGO'
+            WHEN UPPER(TRIM(commodity_group)) = 'PETROLEUM' THEN 'PETROLEUM'
             WHEN UPPER(TRIM(commodity_group)) IN ('GENERAL/OTHER', 'GENERAL / OTHER') THEN 'GENERAL/OTHER'
-            WHEN UPPER(TRIM(commodity_group)) IN (
-              'FERTILIZER RAW MATERIAL DRY',
-              'FERTILIZER RAWMATERIAL DRY'
-            ) THEN 'FERTILIZER RAW MATERIAL DRY'
+            WHEN UPPER(TRIM(commodity_group)) IN ('FERTILIZER RAW MATERIAL DRY', 'FERTILIZER RAWMATERIAL DRY') THEN 'FERTILIZER RAW MATERIAL DRY'
           END AS category,
           SUM(invoice_amount) AS revenue
         FROM PortRecords
-        WHERE invoice_amount IS NOT NULL 
-          AND invoice_amount > 0
+        WHERE invoice_amount > 0
           AND UPPER(TRIM(commodity_group)) IN (
             'OTHER CARGO',
             'PETROLEUM',
@@ -248,18 +189,13 @@ const historicalController = {
       `;
 
       const commodityData = await sequelize.query(query, { type: QueryTypes.SELECT, replacements: f1.replacements });
-
-      const formatted = commodityData.map(c => ({
-        name: c.category,
-        value: parseFloat(c.revenue) || 0
-      }));
+      const formatted = commodityData.map(c => ({ name: c.category, value: parseFloat(c.revenue) || 0 }));
 
       cache.set(cacheKey, formatted);
-      console.timeEnd("historical-api");
+      console.timeEnd(timerLabel);
       res.json(formatted);
     } catch (error) {
-      console.timeEnd("historical-api");
-      console.error(error);
+      console.error('historical-commodities error:', error.message);
       res.status(500).json({ error: 'Failed to retrieve commodity distribution' });
     }
   },
@@ -268,25 +204,20 @@ const historicalController = {
   getGanttData: async (req, res) => {
     try {
       const { startDate, endDate } = req.query;
-      
+
       let cacheKey = `historical_gantt_all`;
-      if (startDate && endDate) {
-        cacheKey += `_range_${startDate}_${endDate}`;
-      }
+      if (startDate && endDate) cacheKey += `_range_${startDate}_${endDate}`;
       if (req.user) {
-        if (req.user.role === 'Party' && req.user.party_name) {
-          cacheKey += `_party_${req.user.party_name}`;
-        } else if (req.user.role === 'VCN' && req.user.vcn) {
-          cacheKey += `_vcn_${req.user.vcn}`;
-        }
+        if (req.user.role === 'Party' && req.user.party_name) cacheKey += `_party_${req.user.party_name}`;
+        else if (req.user.role === 'VCN' && req.user.vcn) cacheKey += `_vcn_${req.user.vcn}`;
       }
       const cached = cache.get(cacheKey);
-      if (cached) {
-        return res.json(cached);
-      }
+      if (cached) return res.json(cached);
 
-      console.time("historical-api");
-      const f1 = getYearFilter(req, true, '', !!(startDate && endDate)); // ignoreYear = true if startDate and endDate are present
+      const timerLabel = `historical-gantt-${Date.now()}`;
+      console.time(timerLabel);
+
+      const f1 = getYearFilter(req, true, '', true); // Always ignore global year filter for Gantt timeline
 
       let dateClause = '';
       const replacements = { ...f1.replacements };
@@ -296,28 +227,19 @@ const historicalController = {
         replacements.endDate = endDate;
       }
 
-      const ganttData = await sequelize.query(`
-        SELECT DISTINCT
-          vcn,
-          vessel_name as vesselName,
-          berth,
-          vessel_type as vesselType,
-          grt,
-          ata
+      const ganttData = await sequelize.query(
+        `SELECT DISTINCT vcn, vessel_name as vesselName, berth, vessel_type as vesselType, grt, ata
         FROM PortRecords
-        WHERE ata IS NOT NULL 
-          AND berth IS NOT NULL AND berth != ""
-          AND vessel_name IS NOT NULL AND vessel_name != ""${f1.clause}${dateClause}
-        ORDER BY ata DESC
-        LIMIT 250
-      `, { type: QueryTypes.SELECT, replacements });
+        WHERE ata IS NOT NULL AND berth IS NOT NULL AND berth != "" AND vessel_name IS NOT NULL AND vessel_name != ""${f1.clause}${dateClause}
+        ORDER BY ata DESC LIMIT 250`,
+        { type: QueryTypes.SELECT, replacements }
+      );
 
       const formatted = ganttData.map(v => {
         const arrival = new Date(v.ata);
         const grtVal = parseFloat(v.grt) || 10000;
         const durationDays = 1.0 + (grtVal / 50000.0);
         const departure = new Date(arrival.getTime() + durationDays * 24 * 60 * 60 * 1000);
-
         return {
           vcn: v.vcn,
           vesselName: v.vesselName,
@@ -330,11 +252,10 @@ const historicalController = {
       });
 
       cache.set(cacheKey, formatted);
-      console.timeEnd("historical-api");
+      console.timeEnd(timerLabel);
       res.json(formatted);
     } catch (error) {
-      console.timeEnd("historical-api");
-      console.error(error);
+      console.error('historical-gantt error:', error.message);
       res.status(500).json({ error: 'Failed to retrieve Gantt data' });
     }
   }

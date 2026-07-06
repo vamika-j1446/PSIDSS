@@ -129,18 +129,22 @@ const simulationController = {
           ORDER BY source_year ASC
         `, { type: QueryTypes.SELECT, replacements: projReplacements });
 
-        // 4. Fetch distinct berths alphabetically
-        const distinctBerthsResult = await sequelize.query(`
-          SELECT DISTINCT berth
-          FROM PortRecords
-          WHERE berth IS NOT NULL AND berth != ""
-          ORDER BY berth ASC
-        `, { type: QueryTypes.SELECT });
+        // 4. Fetch distinct berths alphabetically (cache globally since it rarely changes)
+        let berthsList = cache.get('global_berths_list');
+        if (!berthsList) {
+          const distinctBerthsResult = await sequelize.query(`
+            SELECT DISTINCT berth
+            FROM PortRecords
+            WHERE berth IS NOT NULL AND berth != ""
+            ORDER BY berth ASC
+          `, { type: QueryTypes.SELECT });
 
-        const berthsList = ['All Berths', ...distinctBerthsResult
-          .map(r => r.berth ? r.berth.trim() : '')
-          .filter(b => b !== '')
-        ];
+          berthsList = ['All Berths', ...distinctBerthsResult
+            .map(r => r.berth ? r.berth.trim() : '')
+            .filter(b => b !== '')
+          ];
+          cache.set('global_berths_list', berthsList);
+        }
 
         baseData = {
           baseRevenue,

@@ -37,14 +37,6 @@ export default function Recommendations({ token, selectedYear }) {
     }));
   };
 
-  if (loading) {
-    return (
-      <div class="flex items-center justify-center h-96">
-        <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div class="p-4 bg-red-950/30 border border-red-900/40 rounded-xl text-red-300 flex items-center gap-2 max-w-xl mx-auto my-12">
@@ -85,8 +77,8 @@ export default function Recommendations({ token, selectedYear }) {
   };
 
   // Strategic priorities counts
-  const highImpactCount = recs.filter(r => r.impact.includes('HIGH') || r.impact.includes('CRITICAL')).length;
-  const mediumImpactCount = recs.filter(r => r.impact.includes('MEDIUM')).length;
+  const highImpactCount = recs.filter(r => r.impact?.includes('HIGH') || r.impact?.includes('CRITICAL')).length;
+  const mediumImpactCount = recs.filter(r => r.impact?.includes('MEDIUM')).length;
   const retentionAlerts = recs.filter(r => r.category === 'Retention').length;
   const growthOpportunities = recs.filter(r => r.category === 'Opportunities').length;
 
@@ -113,7 +105,7 @@ export default function Recommendations({ token, selectedYear }) {
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                {cat} ({getFilterCount(cat)})
+                {cat} ({loading ? '...' : getFilterCount(cat)})
               </button>
             ))}
           </div>
@@ -126,19 +118,19 @@ export default function Recommendations({ token, selectedYear }) {
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-semibold">
           <div class="p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col justify-between">
             <span class="text-slate-400 text-[10px] uppercase block mb-1">High Impact</span>
-            <span class="text-sm font-bold text-red-400">{highImpactCount}</span>
+            <span class="text-sm font-bold text-red-400">{loading ? '...' : highImpactCount}</span>
           </div>
           <div class="p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col justify-between">
             <span class="text-slate-400 text-[10px] uppercase block mb-1">Medium Impact</span>
-            <span class="text-sm font-bold text-yellow-400">{mediumImpactCount}</span>
+            <span class="text-sm font-bold text-yellow-400">{loading ? '...' : mediumImpactCount}</span>
           </div>
           <div class="p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col justify-between">
             <span class="text-slate-400 text-[10px] uppercase block mb-1">Customer Retention</span>
-            <span class="text-sm font-bold text-blue-400">{retentionAlerts} Alert{retentionAlerts !== 1 ? 's' : ''}</span>
+            <span class="text-sm font-bold text-blue-400">{loading ? '...' : `${retentionAlerts} Alert${retentionAlerts !== 1 ? 's' : ''}`}</span>
           </div>
           <div class="p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col justify-between">
             <span class="text-slate-400 text-[10px] uppercase block mb-1">Opportunities</span>
-            <span class="text-sm font-bold text-emerald-400">{growthOpportunities} Growth Segment{growthOpportunities !== 1 ? 's' : ''}</span>
+            <span class="text-sm font-bold text-emerald-400">{loading ? '...' : `${growthOpportunities} Growth Segment${growthOpportunities !== 1 ? 's' : ''}`}</span>
           </div>
         </div>
         <p class="text-[10px] text-slate-500 italic">
@@ -148,7 +140,13 @@ export default function Recommendations({ token, selectedYear }) {
 
       {/* Advisory list */}
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {filteredRecs.length === 0 ? (
+        {loading ? (
+          <div class="col-span-full space-y-4">
+            {[1, 2, 3, 4].map(n => (
+              <div key={n} class="h-40 bg-slate-900 animate-pulse rounded-2xl"></div>
+            ))}
+          </div>
+        ) : filteredRecs.length === 0 ? (
           <div class="col-span-full p-8 rounded-2xl glass-panel border border-slate-900 text-center flex flex-col justify-center items-center py-20 space-y-4">
             <CheckCircle class="h-12 w-12 text-emerald-400 animate-pulse" />
             <div class="space-y-1">
@@ -160,7 +158,7 @@ export default function Recommendations({ token, selectedYear }) {
           </div>
         ) : (
           filteredRecs.map((rec) => {
-            const isHigh = rec.impact.toUpperCase().includes('HIGH') || rec.impact.toUpperCase().includes('CRITICAL');
+            const isHigh = rec.impact?.toUpperCase().includes('HIGH') || rec.impact?.toUpperCase().includes('CRITICAL');
             const borderClass = isHigh
               ? 'border-l-4 border-l-red-500'
               : 'border-l-4 border-l-yellow-500';
@@ -196,7 +194,7 @@ export default function Recommendations({ token, selectedYear }) {
                     </div>
 
                     <div class="p-2.5 bg-slate-950/60 border border-slate-900 rounded-lg w-fit">
-                      <span class="text-[9px] text-blue-400 uppercase block tracking-wider mb-0.5">Key Evidence</span>
+                      <span class="text-[9px] text-blue-400 uppercase block tracking-wider mb-0.5">Metric</span>
                       <p class="text-[11px] text-slate-100 font-mono font-bold leading-normal">{rec.evidence}</p>
                     </div>
 

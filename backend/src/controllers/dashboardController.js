@@ -22,7 +22,8 @@ const dashboardController = {
         return res.json(cached);
       }
 
-      console.time("dashboard-api");
+      const timerLabel = `dashboard-api-${year}-${Date.now()}`;
+      console.time(timerLabel);
       // ---------------------------------------------------------
       // LOCAL YEAR FILTER FIX
       // Do NOT use old getYearFilter here.
@@ -157,11 +158,10 @@ const dashboardController = {
             COUNT(*) AS totalTransactions,
             COUNT(DISTINCT CASE WHEN vessel_name IS NOT NULL AND TRIM(vessel_name) != '' THEN vessel_name END) AS totalVessels,
             COUNT(DISTINCT CASE WHEN party_name IS NOT NULL AND TRIM(party_name) != '' THEN party_name END) AS totalCustomers,
-            COUNT(DISTINCT CASE WHEN berth IS NOT NULL AND TRIM(berth) != '' THEN berth END) AS totalBerths,
-            COUNT(DISTINCT CASE WHEN ${categoryExpression} IS NOT NULL AND TRIM(${categoryExpression}) != '' AND ${serviceFilterSqlSelect} THEN ${categoryExpression} END) AS totalCommodities
+            COUNT(DISTINCT CASE WHEN berth IS NOT NULL AND TRIM(berth) != '' THEN berth END) AS totalBerths
           FROM PortRecords
           ${filter.whereClause}`,
-          { type: QueryTypes.SELECT, replacements: { ...filter.replacements, ...serviceReplacements } }
+          { type: QueryTypes.SELECT, replacements: filter.replacements }
         ),
         // 2. Total GRT
         sequelize.query(
@@ -184,16 +184,13 @@ const dashboardController = {
           GROUP BY berth ORDER BY revenue DESC LIMIT 1`,
           { type: QueryTypes.SELECT, replacements: filter.replacements }
         ),
-        // 4. Top Commodity
+        // 4. Commodity Revenues (grouped for top commodity & total commodities count)
         sequelize.query(
-          `SELECT category AS commodity, COALESCE(SUM(invoice_amount), 0) AS revenue
-          FROM (
-            SELECT ${categoryExpression} AS category, invoice_amount
-            FROM PortRecords ${filter.whereClause}
-          ) AS t
-          WHERE category IS NOT NULL AND TRIM(category) != '' AND ${serviceFilterSql}
-          GROUP BY category ORDER BY revenue DESC LIMIT 1`,
-          { type: QueryTypes.SELECT, replacements: { ...filter.replacements, ...serviceReplacements } }
+          `SELECT ${categoryExpression} AS category, COALESCE(SUM(invoice_amount), 0) AS revenue
+          FROM PortRecords
+          ${filter.whereClause}
+          GROUP BY category`,
+          { type: QueryTypes.SELECT, replacements: filter.replacements }
         ),
         // 5. Top Customer
         sequelize.query(
@@ -216,15 +213,32 @@ const dashboardController = {
         )
       ]);
 
+      const serviceKeywordsUpper = serviceKeywords.map(k => k.toUpperCase());
+
+      // Filter commodity revenues in memory to exclude services
+      const filteredCommodityRevenues = topCommodityResult
+        .map(r => ({
+          commodity: (r.category || '').trim(),
+          revenue: parseFloat(r.revenue) || 0
+        }))
+        .filter(r => {
+          if (!r.commodity) return false;
+          const upperCat = r.commodity.toUpperCase();
+          return !serviceKeywordsUpper.some(k => upperCat.includes(k));
+        });
+
       const totalRevenue = parseFloat(combinedResult[0]?.totalRevenue) || 0;
       const totalTransactions = parseInt(combinedResult[0]?.totalTransactions, 10) || 0;
       const totalVessels = parseInt(combinedResult[0]?.totalVessels, 10) || 0;
       const totalCustomers = parseInt(combinedResult[0]?.totalCustomers, 10) || 0;
       const totalBerths = parseInt(combinedResult[0]?.totalBerths, 10) || 0;
-      const totalCommodities = parseInt(combinedResult[0]?.totalCommodities, 10) || 0;
+      const totalCommodities = filteredCommodityRevenues.length;
       const totalGRT = parseFloat(grtResult[0]?.totalGRT) || 0;
       const topBerth = topBerthResult[0]?.berth || 'N/A';
-      const topCommodity = topCommodityResult[0]?.commodity || 'N/A';
+      
+      // Sort in descending order to get top commodity
+      filteredCommodityRevenues.sort((a, b) => b.revenue - a.revenue);
+      const topCommodity = filteredCommodityRevenues[0]?.commodity || 'N/A';
       const topCustomer = topCustomerResult[0]?.party_name || 'N/A';
 
       let cagr = 0;
@@ -271,16 +285,13 @@ const dashboardController = {
       if (latestYear && prevYear) {
         const [growthRows, customerLosses] = await Promise.all([
           sequelize.query(
-            `SELECT category,
+            `SELECT ${categoryExpression} AS category,
               SUM(CASE WHEN source_year = :prevYear THEN invoice_amount ELSE 0 END) AS prevRev,
               SUM(CASE WHEN source_year = :latestYear THEN invoice_amount ELSE 0 END) AS latestRev
-            FROM (
-              SELECT ${categoryExpression} AS category, source_year, invoice_amount
-              FROM PortRecords ${filter.whereClause}
-            ) AS t
-            WHERE category IS NOT NULL AND TRIM(category) != '' AND ${serviceFilterSql}
+            FROM PortRecords
+            ${filter.whereClause}
             GROUP BY category`,
-            { type: QueryTypes.SELECT, replacements: { ...filter.replacements, ...serviceReplacements, prevYear, latestYear } }
+            { type: QueryTypes.SELECT, replacements: { ...filter.replacements, prevYear, latestYear } }
           ),
           sequelize.query(
             `SELECT party_name,
@@ -295,8 +306,15 @@ const dashboardController = {
           )
         ]);
 
+        const filteredGrowthRows = growthRows.filter(row => {
+          const cat = (row.category || '').trim();
+          if (!cat) return false;
+          const upperCat = cat.toUpperCase();
+          return !serviceKeywordsUpper.some(k => upperCat.includes(k));
+        });
+
         let maxGrowth = -Infinity;
-        growthRows.forEach((row) => {
+        filteredGrowthRows.forEach((row) => {
           const prev = parseFloat(row.prevRev) || 0;
           const latest = parseFloat(row.latestRev) || 0;
           if (prev >= 1000000 && latest > prev) {
@@ -350,15 +368,11 @@ const dashboardController = {
 
       cache.set(cacheKey, responseData);
 
-      console.timeEnd("dashboard-api");
+      console.timeEnd(timerLabel);
       res.json(responseData);
     } catch (error) {
-      console.timeEnd("dashboard-api");
-      console.error('[DASHBOARD KPI ERROR]', error);
-      res.status(500).json({
-        error: 'Failed to retrieve dashboard KPIs',
-        details: error.message
-      });
+      console.error('Dashboard KPI error:', error.message);
+      res.status(500).json({ error: 'Failed to retrieve dashboard KPIs' });
     }
   }
 };
