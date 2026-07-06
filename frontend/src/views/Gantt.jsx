@@ -11,6 +11,14 @@ export default function Gantt({ token, selectedYear }) {
   const [localYear, setLocalYear] = useState(selectedYear || 'All');
   const [localMonth, setLocalMonth] = useState('All');
 
+  // Input states for calendar selectors
+  const [inputStartDate, setInputStartDate] = useState('');
+  const [inputEndDate, setInputEndDate] = useState('');
+
+  // Applied date filters used for rendering the timeline
+  const [startDateStr, setStartDateStr] = useState('');
+  const [endDateStr, setEndDateStr] = useState('');
+
   // Timezone-safe local date parser
   const parseLocalDate = (dateStr) => {
     if (!dateStr) return null;
@@ -30,10 +38,6 @@ export default function Gantt({ token, selectedYear }) {
     const clean = String(dateStr).replace(' ', 'T');
     return new Date(clean);
   };
-
-  // Date range inputs (initialized from database limits)
-  const [startDateStr, setStartDateStr] = useState('');
-  const [endDateStr, setEndDateStr] = useState('');
 
   const isValidDate = (dStr) => {
     if (!dStr) return false;
@@ -65,15 +69,19 @@ export default function Gantt({ token, selectedYear }) {
     setLocalMonth('All');
   }, [selectedYear]);
 
-  useEffect(() => {
-    const fetchGanttData = async () => {
-      setLoading(true);
-      try {
-        const config = { headers: { Authorization: `Bearer ${token}` } };
-        const response = await axios.get(`/api/historical/gantt?year=${localYear}`, config);
-        const data = response.data;
-        setVessels(data);
+  const fetchGanttData = async (start = '', end = '') => {
+    setLoading(true);
+    try {
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      let url = `/api/historical/gantt?year=${localYear}`;
+      if (start && end) {
+        url += `&startDate=${start}&endDate=${end}`;
+      }
+      const response = await axios.get(url, config);
+      const data = response.data;
+      setVessels(data);
 
+      if (!start || !end) {
         if (data.length > 0) {
           // Sort arrival dates
           const dates = data.map(v => parseVesselDate(v.ata)).filter(Boolean).sort((a, b) => a - b);
@@ -81,48 +89,45 @@ export default function Gantt({ token, selectedYear }) {
           const maxDate = dates[dates.length - 1] || new Date();
           
           // Default: show the first 30 days of data, or the full year range
-          const start = minDate;
-          const end = new Date(minDate.getTime() + 30 * 24 * 60 * 60 * 1000) < maxDate 
+          const defaultStart = minDate;
+          const defaultEnd = new Date(minDate.getTime() + 30 * 24 * 60 * 60 * 1000) < maxDate 
             ? new Date(minDate.getTime() + 30 * 24 * 60 * 60 * 1000) 
             : maxDate;
           
-          setStartDateStr(start.toISOString().split('T')[0]);
-          setEndDateStr(end.toISOString().split('T')[0]);
+          const sStr = defaultStart.toISOString().split('T')[0];
+          const eStr = defaultEnd.toISOString().split('T')[0];
+          setStartDateStr(sStr);
+          setEndDateStr(eStr);
+          setInputStartDate(sStr);
+          setInputEndDate(eStr);
         } else {
           setStartDateStr('');
           setEndDateStr('');
+          setInputStartDate('');
+          setInputEndDate('');
         }
-      } catch (err) {
-        console.error(err);
-        setError('Failed to load berth timeline Gantt data.');
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (err) {
+      console.error(err);
+      setError('Failed to load berth timeline Gantt data.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchGanttData();
   }, [token, localYear]);
 
-  // Debounced/refetch query when valid date range is entered manually
-  useEffect(() => {
-    if (!isValidDate(startDateStr) || !isValidDate(endDateStr)) return;
-
-    const refetchRange = async () => {
-      try {
-        const config = { headers: { Authorization: `Bearer ${token}` } };
-        const response = await axios.get(`/api/historical/gantt?year=${localYear}&startDate=${startDateStr}&endDate=${endDateStr}`, config);
-        setVessels(response.data);
-      } catch (err) {
-        console.error('Failed to load range Gantt data:', err);
-      }
-    };
-
-    const delay = setTimeout(() => {
-      refetchRange();
-    }, 450);
-
-    return () => clearTimeout(delay);
-  }, [startDateStr, endDateStr, token, localYear]);
+  const handleApplyFilter = () => {
+    if (!isValidDate(inputStartDate) || !isValidDate(inputEndDate)) {
+      alert("Please select valid dates");
+      return;
+    }
+    setStartDateStr(inputStartDate);
+    setEndDateStr(inputEndDate);
+    fetchGanttData(inputStartDate, inputEndDate);
+  };
 
   const handleMonthChange = (mVal) => {
     setLocalMonth(mVal);
@@ -135,26 +140,18 @@ export default function Gantt({ token, selectedYear }) {
     const firstDay = `${yr}-${String(monthNum).padStart(2, '0')}-01`;
     const lastDayNum = new Date(parseInt(yr), monthNum, 0).getDate();
     const lastDay = `${yr}-${String(monthNum).padStart(2, '0')}-${String(lastDayNum).padStart(2, '0')}`;
+    
+    setInputStartDate(firstDay);
+    setInputEndDate(lastDay);
     setStartDateStr(firstDay);
     setEndDateStr(lastDay);
+    fetchGanttData(firstDay, lastDay);
   };
 
   const resetFilters = () => {
     setLocalYear(selectedYear || 'All');
     setLocalMonth('All');
-    if (vessels.length > 0) {
-      const dates = vessels.map(v => parseVesselDate(v.ata)).filter(Boolean).sort((a, b) => a - b);
-      if (dates.length > 0) {
-        const minDate = dates[0];
-        const maxDate = dates[dates.length - 1];
-        const start = minDate;
-        const end = new Date(minDate.getTime() + 30 * 24 * 60 * 60 * 1000) < maxDate 
-          ? new Date(minDate.getTime() + 30 * 24 * 60 * 60 * 1000) 
-          : maxDate;
-        setStartDateStr(start.toISOString().split('T')[0]);
-        setEndDateStr(end.toISOString().split('T')[0]);
-      }
-    }
+    fetchGanttData();
   };
 
   const hasValidRange = isValidDate(startDateStr) && isValidDate(endDateStr);
@@ -253,45 +250,34 @@ export default function Gantt({ token, selectedYear }) {
     if (t.includes('cruise') || t.includes('passenger')) {
       return 'bg-purple-500/25 text-purple-400 border border-purple-500/40 hover:bg-purple-500/35 hover:shadow-[0_0_15px_rgba(168,85,247,0.15)]';
     }
-    return 'bg-emerald-500/20 text-emerald-400 border border-emerald-600/30 hover:bg-emerald-500/30';
+    return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 hover:shadow-[0_0_15px_rgba(16,185,129,0.15)]';
   };
 
-  // Generate date markers for the timeline columns (e.g. 10 intervals)
-  const columnsCount = 10;
+  // Generate date markers for columns
+  const activeVesselsInWindow = vessels.filter(v => getTimelineOverlap(v) !== null);
+  const columnsCount = 6;
   const colMarkers = [];
   if (timelineStart && timelineEnd) {
-    const totalMs = timelineEnd.getTime() - timelineStart.getTime();
-    const stepMs = totalMs / columnsCount;
-    for (let i = 0; i <= columnsCount; i++) {
-      const d = new Date(timelineStart.getTime() + i * stepMs);
-      colMarkers.push(d);
+    const stepMs = (timelineEnd.getTime() - timelineStart.getTime()) / (columnsCount - 1);
+    for (let i = 0; i < columnsCount; i++) {
+      colMarkers.push(new Date(timelineStart.getTime() + i * stepMs));
     }
   }
 
-  // Filter vessels currently displayed in the window
-  const activeVesselsInWindow = timelineStart && timelineEnd ? vessels.filter(v => {
-    const vStart = parseVesselDate(v.ata).getTime();
-    const vEnd = parseVesselDate(v.departure).getTime();
-    const tStart = timelineStart.getTime();
-    const tEnd = timelineEnd.getTime();
-    return !(vEnd < tStart || vStart > tEnd);
-  }) : [];
-
   return (
-    <div class="space-y-8 animate-fade-in">
-      {/* Header & Filters Panel */}
+    <div class="space-y-8 animate-fade-in pb-12">
+      {/* Header & Local Filters */}
       <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h2 class="text-3xl font-extrabold text-white tracking-tight">Berth Timeline (Gantt)</h2>
-          <p class="text-slate-400 text-sm mt-1">Real-time occupancy timeline. Tracks docks availability, ship turnaround estimates, and schedules.</p>
+          <p class="text-slate-400 text-sm mt-1">Real-time terminal lane occupancy tracking, overlaps, and turnaround audits.</p>
         </div>
 
-        {/* Safe and user-friendly filters */}
-        <div class="flex flex-wrap items-center gap-4 bg-slate-900/80 p-4 rounded-2xl border border-slate-800 self-start text-xs text-slate-300 w-full lg:w-auto">
+        <div class="flex flex-wrap items-center gap-4 bg-slate-900/40 p-4 rounded-xl border border-slate-800/60 w-fit">
           
-          {/* Year Dropdown */}
+          {/* Year selector */}
           <div class="flex flex-col">
-            <span class="text-[9px] text-slate-500 font-bold uppercase mb-1">Year</span>
+            <span class="text-[9px] text-slate-500 font-bold uppercase mb-1">Fiscal Year</span>
             <select
               value={localYear}
               onChange={(e) => {
@@ -301,20 +287,19 @@ export default function Gantt({ token, selectedYear }) {
               class="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-blue-500"
             >
               <option value="All">All Years</option>
-              <option value="2016">2016</option>
-              <option value="2017">2017</option>
-              <option value="2018">2018</option>
-              <option value="2019">2019</option>
-              <option value="2020">2020</option>
-              <option value="2021">2021</option>
-              <option value="2022">2022</option>
-              <option value="2023">2023</option>
-              <option value="2024">2024</option>
-              <option value="2025">2025</option>
+              <option value="2024">2024–25</option>
+              <option value="2023">2023–24</option>
+              <option value="2022">2022–23</option>
+              <option value="2021">2021–22</option>
+              <option value="2020">2020–21</option>
+              <option value="2019">2019–20</option>
+              <option value="2018">2018–19</option>
+              <option value="2017">2017–18</option>
+              <option value="2016">2016–17</option>
             </select>
           </div>
 
-          {/* Month Dropdown */}
+          {/* Month selector */}
           <div class="flex flex-col">
             <span class="text-[9px] text-slate-500 font-bold uppercase mb-1">Month</span>
             <select
@@ -331,34 +316,42 @@ export default function Gantt({ token, selectedYear }) {
           {/* Date range picker */}
           <div class="flex items-center gap-2">
             <div class="flex flex-col">
-              <span class="text-[9px] text-slate-500 font-bold uppercase mb-1">From Date</span>
+              <span class="text-[9px] text-slate-500 font-bold uppercase mb-1">Start Date</span>
               <input 
                 type="date" 
                 min={yearMin}
                 max={yearMax}
-                value={startDateStr} 
-                onChange={(e) => setStartDateStr(e.target.value)}
+                value={inputStartDate} 
+                onChange={(e) => setInputStartDate(e.target.value)}
                 class="bg-slate-950 border border-slate-800 rounded px-2.5 py-0.5 text-xs text-slate-300 focus:outline-none"
               />
             </div>
             <span class="text-slate-600 mt-3">—</span>
             <div class="flex flex-col">
-              <span class="text-[9px] text-slate-500 font-bold uppercase mb-1">To Date</span>
+              <span class="text-[9px] text-slate-500 font-bold uppercase mb-1">End Date</span>
               <input 
                 type="date" 
                 min={yearMin}
                 max={yearMax}
-                value={endDateStr} 
-                onChange={(e) => setEndDateStr(e.target.value)}
+                value={inputEndDate} 
+                onChange={(e) => setInputEndDate(e.target.value)}
                 class="bg-slate-950 border border-slate-800 rounded px-2.5 py-0.5 text-xs text-slate-300 focus:outline-none"
               />
             </div>
           </div>
 
+          {/* Apply Filter Button */}
+          <button
+            onClick={handleApplyFilter}
+            class="bg-blue-600 hover:bg-blue-500 text-white border border-blue-500 hover:border-blue-400 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none self-end cursor-pointer"
+          >
+            Apply Filter
+          </button>
+
           {/* Reset Filter Button */}
           <button
             onClick={resetFilters}
-            class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none self-end"
+            class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none self-end cursor-pointer"
           >
             Reset
           </button>
@@ -384,11 +377,11 @@ export default function Gantt({ token, selectedYear }) {
             <div class="relative flex border-b border-slate-800 pb-3 pl-24">
               <div class="w-full relative h-6 text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
                 {colMarkers.map((date, idx) => {
-                  const leftPercent = (idx / columnsCount) * 100;
+                  const leftPercent = (idx / (columnsCount - 1)) * 100;
                   return (
                     <div 
                       key={idx} 
-                      class="absolute -translate-x-1/2 flex flex-col items-center" 
+                      class="absolute -translate-x-1/2 flex flex-col items-center animate-fade-in" 
                       style={{ left: `${leftPercent}%` }}
                     >
                       <Calendar class="h-3 w-3 mb-0.5 text-slate-600" />
@@ -400,9 +393,8 @@ export default function Gantt({ token, selectedYear }) {
             </div>
 
             {/* Timeline Swimlanes Container */}
-            <div class="space-y-4 relative">
+            <div class="space-y-4 relative animate-fade-in">
               {berths.map((berth) => {
-                // Filter vessels on this berth
                 const berthVessels = vessels.filter(v => v.berth === berth);
                 const { stackedVessels, laneCount } = stackVesselsInLanes(berthVessels);
 

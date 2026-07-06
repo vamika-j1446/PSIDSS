@@ -103,34 +103,31 @@ const predictiveController = {
           const prev2Rev = prev2Year ? (profile[prev2Year] || 0) : 0;
 
           let isAtRisk = false;
-          let riskLevel = 'Medium';
+          let riskLevel = 'MEDIUM RISK';
           let reason = '';
           let declineAmount = 0;
           let declinePercentage = 0;
 
           if (prevRev > 0 && latestRev === 0) {
-            // Condition C: Customer had billing before but disappeared in latest year
             isAtRisk = true;
-            riskLevel = 'High';
+            riskLevel = 'HIGH RISK';
             declineAmount = prevRev;
             declinePercentage = 100.0;
-            reason = 'Complete customer churn: no cargo billing registered in the latest fiscal year.';
+            reason = 'No billing recorded in the latest fiscal year.';
           } else if (prevRev > 0 && latestRev < prevRev) {
-            // Condition A: latest year revenue lower than previous year
             isAtRisk = true;
             declineAmount = prevRev - latestRev;
             declinePercentage = (declineAmount / prevRev) * 100;
-            riskLevel = declinePercentage > 25 ? 'High' : 'Medium';
-            reason = `Year-over-Year revenue contraction of -${declinePercentage.toFixed(1)}% (fell from ${formatCurrency(prevRev)} to ${formatCurrency(latestRev)}).`;
+            riskLevel = declinePercentage > 25 ? 'HIGH RISK' : 'MEDIUM RISK';
+            reason = `Year-over-Year revenue contraction of -${declinePercentage.toFixed(1)}%.`;
           }
 
           if (prev2Year && prev2Rev > 0 && prevRev < prev2Rev && latestRev < prevRev) {
-            // Condition B: revenue declined for 2 consecutive years
             isAtRisk = true;
             declineAmount = prev2Rev - latestRev;
             declinePercentage = (declineAmount / prev2Rev) * 100;
-            riskLevel = 'High';
-            reason = `Critical risk: consecutive revenue decline for two fiscal years (dropped from ${formatCurrency(prev2Rev)} to ${formatCurrency(latestRev)}).`;
+            riskLevel = 'HIGH RISK';
+            reason = `Consecutive revenue decline for two fiscal years.`;
           }
 
           if (isAtRisk) {
@@ -182,8 +179,8 @@ const predictiveController = {
               latestRevenue: latestRev,
               declineAmount,
               declinePercentage: parseFloat(declinePercentage.toFixed(2)),
-              riskLevel: declinePercentage > 25 ? 'High' : 'Medium',
-              reason: `YoY cargo volume contraction of -${declinePercentage.toFixed(1)}%.`
+              riskLevel: declinePercentage > 25 ? 'HIGH RISK' : 'MEDIUM RISK',
+              reason: 'No latest-year billing recorded.'
             });
           }
         });
@@ -201,17 +198,17 @@ const predictiveController = {
       const totalRevenue = parseFloat(sumResult[0].total) || 1.0;
 
       // A. Customer Concentration Churn Risk
-      let custLvl = 'No Risk';
-      let custWhy = 'No billing customers currently show negative revenue trends or contract alerts.';
+      let custLvl = 'NO RISK';
+      let custWhy = 'Billing partners show stable or growing revenues compared with the previous fiscal year.';
       let custEv = 'All active customer accounts are stable or expanding YoY.';
-      let custAct = 'Continue standard billing accounts support and partner relations.';
+      let custAct = 'Continue monitoring customer accounts YoY.';
 
       if (atRiskCustomers.length > 0) {
-        const highRiskCount = atRiskCustomers.filter(c => c.riskLevel === 'High').length;
-        custLvl = highRiskCount > 0 ? 'High' : 'Medium';
-        custWhy = 'Multiple port billing partners show declining YoY revenue volumes, indicating potential contract churn.';
-        custEv = `${atRiskCustomers.length} active cargo lines show negative revenue trends (Top churn: ${atRiskCustomers[0].name} at -${atRiskCustomers[0].declinePercentage}%).`;
-        custAct = 'Initiate strategic volume lease renegotiations and loyalty incentives for the identified carriers.';
+        const highRiskCount = atRiskCustomers.filter(c => c.riskLevel === 'HIGH RISK').length;
+        custLvl = highRiskCount > 0 ? 'HIGH RISK' : 'MEDIUM RISK';
+        custWhy = 'Some billing partners show revenue decline compared with the previous fiscal year.';
+        custEv = `${atRiskCustomers.length} active partners show negative YoY revenue trends. Highest decline: ${atRiskCustomers[0].name} (-${atRiskCustomers[0].declinePercentage.toFixed(0)}%).`;
+        custAct = 'Review declining customers and identify possible retention actions.';
       }
 
       calculatedRisks.push({
@@ -222,7 +219,7 @@ const predictiveController = {
         action: custAct
       });
 
-      // B. Berth Dependency Failure Risk
+      // B. Berth Dependency Risk
       const berthShares = await sequelize.query(`
         SELECT berth, SUM(invoice_amount) as revenue
         FROM PortRecords
@@ -231,83 +228,83 @@ const predictiveController = {
         ORDER BY revenue DESC LIMIT 1
       `, { type: QueryTypes.SELECT });
 
-      let berthLvl = 'No Risk';
-      let berthWhy = 'Vessel docking is distributed evenly across multiple terminal berths.';
-      let berthEv = 'No single berth handles more than 40% of overall cargo billing.';
-      let berthAct = 'Schedule routine off-peak terminal crane checkups.';
+      let berthLvl = 'NO RISK';
+      let berthWhy = 'Revenue is not heavily dependent on a single berth.';
+      let berthEv = 'No berth contributes more than 40% of total billing.';
+      let berthAct = 'Continue monitoring berth-wise revenue distribution.';
 
       if (berthShares.length > 0) {
         const topBerthRev = parseFloat(berthShares[0].revenue) || 0;
         const topBerthShare = (topBerthRev / totalRevenue) * 100;
         if (topBerthShare > 50) {
-          berthLvl = 'High';
-          berthWhy = 'Over-reliance on a single terminal. A major crane outage or channel bottleneck will freeze half of the port\'s monthly revenue.';
+          berthLvl = 'HIGH RISK';
+          berthWhy = 'High revenue concentration around a single berth dock.';
           berthEv = `Berth '${berthShares[0].berth}' drives ${topBerthShare.toFixed(1)}% of total port billing volume.`;
-          berthAct = 'Install high-speed crane backups and dredge secondary drafts to accommodate container redirections.';
+          berthAct = 'Continue monitoring berth-wise revenue distribution.';
         } else if (topBerthShare > 30) {
-          berthLvl = 'Medium';
+          berthLvl = 'MEDIUM RISK';
           berthWhy = 'Significant billing concentration around a single dock area.';
           berthEv = `Berth '${berthShares[0].berth}' drives ${topBerthShare.toFixed(1)}% of port billing.`;
-          berthAct = 'Reroute feeder vessels and small bulk carriers to auxiliary docks.';
+          berthAct = 'Continue monitoring berth-wise revenue distribution.';
         }
       }
 
       calculatedRisks.push({
-        name: 'Berth Dependency Failure Risk',
+        name: 'Berth Dependency Risk',
         level: berthLvl,
         why: berthWhy,
         evidence: berthEv,
         action: berthAct
       });
 
-      // C. Cargo Segment Churn Risk
-      let cargoLvl = 'No Risk';
-      let cargoWhy = 'All operational cargo sectors are stable or expanding YoY. No storage yard bottlenecks detected.';
+      // C. Commodity Decline Risk
+      let cargoLvl = 'NO RISK';
+      let cargoWhy = 'All cargo commodities are stable or expanding YoY.';
       let cargoEv = 'No active cargo commodities have negative YoY projection slopes.';
-      let cargoAct = 'Continue standard warehousing and storage yard operations.';
+      let cargoAct = 'Monitor declining commodity items and compare with commodity group trends.';
 
       if (decliningCommodities.length > 0) {
-        const highRiskCount = decliningCommodities.filter(cc => cc.riskLevel === 'High').length;
-        cargoLvl = highRiskCount > 0 ? 'High' : 'Medium';
-        cargoWhy = 'Active database aggregates indicate contraction within specific commodities, threatening dry/liquid yard utilization.';
-        cargoEv = `${decliningCommodities.length} commodities show YoY billing drops (Top: '${decliningCommodities[0].name}' at -${decliningCommodities[0].declinePercentage}%).`;
-        cargoAct = `Re-purpose storage areas assigned to '${decliningCommodities[0].name}' to support growing cargo sectors.`;
+        const highRiskCount = decliningCommodities.filter(cc => cc.riskLevel === 'HIGH RISK').length;
+        cargoLvl = highRiskCount > 0 ? 'HIGH RISK' : 'MEDIUM RISK';
+        cargoWhy = 'Some commodity items show revenue decline.';
+        cargoEv = `${decliningCommodities.length} commodities show YoY billing drops. Highest decline: ${decliningCommodities[0].name} (-${decliningCommodities[0].declinePercentage.toFixed(0)}%).`;
+        cargoAct = 'Monitor declining commodity items and compare with commodity group trends.';
       }
 
       calculatedRisks.push({
-        name: 'Cargo Segment Churn Risk',
+        name: 'Commodity Decline Risk',
         level: cargoLvl,
         why: cargoWhy,
         evidence: cargoEv,
         action: cargoAct
       });
 
-      // D. Revenue Projection Churn Risk
+      // D. Revenue Projection Risk
       const revForecasts = grouped.revenue.filter(f => f.horizon === 'month');
       revForecasts.sort((a, b) => new Date(a.date) - new Date(b.date));
       const lastRevForecast = revForecasts[revForecasts.length - 1];
 
-      let revLvl = 'No Risk';
-      let revWhy = 'Regression modeling indicates stable, positive billing growth projections.';
-      let revEv = 'Forecast models predict positive revenue trajectory over the monthly horizon.';
-      let revAct = 'Proceed with planned port capital expenditure projects.';
+      let revLvl = 'NO RISK';
+      let revWhy = 'Forecasted revenue trend is positive.';
+      let revEv = 'Forecast model indicates stable positive billing growth.';
+      let revAct = 'Continue tracking forecasted revenue and review changes monthly.';
 
       if (lastRevForecast) {
         if (lastRevForecast.growth < -10) {
-          revLvl = 'High';
-          revWhy = 'Predictive regression warns of port-wide billing drops over the monthly horizon.';
+          revLvl = 'HIGH RISK';
+          revWhy = 'Forecasted revenue trend shows negative trajectory.';
           revEv = `Linear trend projections forecast a monthly revenue drop-rate of ${lastRevForecast.growth.toFixed(1)}%.`;
-          revAct = 'Freeze all non-essential capex and deploy a +10% sandbox tariff adjustment immediately.';
+          revAct = 'Continue tracking forecasted revenue and review changes monthly.';
         } else if (lastRevForecast.growth < 0) {
-          revLvl = 'Medium';
-          revWhy = 'Predictive regression shows moderate risk of revenue volume stagnation.';
+          revLvl = 'MEDIUM RISK';
+          revWhy = 'Forecasted revenue trend shows moderate trajectory.';
           revEv = `Linear trend forecasts billing change at ${lastRevForecast.growth.toFixed(1)}%.`;
-          revAct = 'Optimize vessel turnaround times using stack Gantt scheduling to boost throughput.';
+          revAct = 'Continue tracking forecasted revenue and review changes monthly.';
         }
       }
 
       calculatedRisks.push({
-        name: 'Revenue Projection Churn Risk',
+        name: 'Revenue Projection Risk',
         level: revLvl,
         why: revWhy,
         evidence: revEv,

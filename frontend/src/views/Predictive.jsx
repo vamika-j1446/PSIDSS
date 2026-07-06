@@ -1,15 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { Sparkles, TrendingDown, Users, AlertTriangle, AlertCircle, TrendingUp } from 'lucide-react';
+import { Sparkles, TrendingDown, Users, AlertTriangle, AlertCircle } from 'lucide-react';
 
 export default function Predictive({ token, selectedYear, activeTab }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [horizonFilter, setHorizonFilter] = useState('month');
+
+  // Expanded card toggle states
+  const [expandedDetails, setExpandedDetails] = useState({});
+  const [showAllCustomers, setShowAllCustomers] = useState(false);
+  const [showAllCommodities, setShowAllCommodities] = useState(false);
 
   useEffect(() => {
     const fetchForecasts = async () => {
@@ -27,6 +32,22 @@ export default function Predictive({ token, selectedYear, activeTab }) {
 
     fetchForecasts();
   }, [token, selectedYear]);
+
+  const toggleDetails = (index) => {
+    setExpandedDetails(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+  };
+
+  const formatRiskStatusLabel = (level) => {
+    if (!level) return 'No risk';
+    const l = String(level).toUpperCase();
+    if (l.includes('HIGH')) return 'High';
+    if (l.includes('MEDIUM')) return 'Medium';
+    if (l.includes('LOW')) return 'Low';
+    return 'No risk';
+  };
 
   if (loading) {
     return (
@@ -55,6 +76,15 @@ export default function Predictive({ token, selectedYear, activeTab }) {
     if (num >= 1.0e5) return `₹${(num / 1.0e5).toFixed(2)} L`;
     return `₹${num.toLocaleString('en-IN')}`;
   };
+
+  // Slice Top 5 lists
+  const displayedCustomers = showAllCustomers 
+    ? (data?.atRiskCustomers || []) 
+    : (data?.atRiskCustomers || []).slice(0, 5);
+
+  const displayedCommodities = showAllCommodities 
+    ? (data?.decliningCommodities || []) 
+    : (data?.decliningCommodities || []).slice(0, 5);
 
   return (
     <div class="space-y-8 animate-fade-in">
@@ -101,7 +131,6 @@ export default function Predictive({ token, selectedYear, activeTab }) {
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart key={`${selectedYear}_${activeTab}`} data={filteredRevenueForecasts} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
-                  {/* Shaded Area for bounds */}
                   <linearGradient id="forecastGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15}/>
                     <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.01}/>
@@ -116,7 +145,6 @@ export default function Predictive({ token, selectedYear, activeTab }) {
                   labelStyle={{ color: '#fff', fontWeight: 'bold' }}
                 />
                 
-                {/* Confidence Range Area */}
                 <Area 
                   type="monotone" 
                   dataKey="upperBound" 
@@ -139,8 +167,6 @@ export default function Predictive({ token, selectedYear, activeTab }) {
                   animationDuration={1000}
                   animationEasing="ease-in-out"
                 />
-                
-                {/* Main Forecast Line */}
                 <Area 
                   type="monotone" 
                   dataKey="value" 
@@ -158,6 +184,45 @@ export default function Predictive({ token, selectedYear, activeTab }) {
         )}
       </div>
 
+      {/* Summary Box */}
+      <div class="p-6 rounded-2xl glass-panel border border-slate-800/85 bg-slate-950/20 space-y-4 glow-violet">
+        <h4 class="text-sm font-bold text-white uppercase tracking-wider">Risk Summary</h4>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-semibold">
+          <div class="p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col justify-between">
+            <span class="text-slate-400 text-[10px] uppercase block mb-1">Customer Churn</span>
+            <span class={`text-sm font-bold ${
+              data?.calculatedRisks?.[0]?.level.includes('HIGH') ? 'text-red-400' : data?.calculatedRisks?.[0]?.level.includes('MEDIUM') ? 'text-yellow-400' : 'text-emerald-400'
+            }`}>
+              {formatRiskStatusLabel(data?.calculatedRisks?.[0]?.level)}
+            </span>
+          </div>
+          <div class="p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col justify-between">
+            <span class="text-slate-400 text-[10px] uppercase block mb-1">Berth Dependency</span>
+            <span class={`text-sm font-bold ${
+              data?.calculatedRisks?.[1]?.level.includes('HIGH') ? 'text-red-400' : data?.calculatedRisks?.[1]?.level.includes('MEDIUM') ? 'text-yellow-400' : 'text-emerald-400'
+            }`}>
+              {formatRiskStatusLabel(data?.calculatedRisks?.[1]?.level)}
+            </span>
+          </div>
+          <div class="p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col justify-between">
+            <span class="text-slate-400 text-[10px] uppercase block mb-1">Commodity Decline</span>
+            <span class={`text-sm font-bold ${
+              data?.calculatedRisks?.[2]?.level.includes('HIGH') ? 'text-red-400' : data?.calculatedRisks?.[2]?.level.includes('MEDIUM') ? 'text-yellow-400' : 'text-emerald-400'
+            }`}>
+              {formatRiskStatusLabel(data?.calculatedRisks?.[2]?.level)}
+            </span>
+          </div>
+          <div class="p-4 bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col justify-between">
+            <span class="text-slate-400 text-[10px] uppercase block mb-1">Revenue Projection</span>
+            <span class={`text-sm font-bold ${
+              data?.calculatedRisks?.[3]?.level.includes('HIGH') ? 'text-red-400' : data?.calculatedRisks?.[3]?.level.includes('MEDIUM') ? 'text-yellow-400' : 'text-emerald-400'
+            }`}>
+              {formatRiskStatusLabel(data?.calculatedRisks?.[3]?.level)}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Executive Risks Assessment Grid */}
       <div class="space-y-4">
         <h4 class="text-base font-bold text-white flex items-center gap-2">
@@ -171,29 +236,54 @@ export default function Predictive({ token, selectedYear, activeTab }) {
         ) : (
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             {data.calculatedRisks.map((risk, index) => {
-              const bgClass = risk.level === 'High' 
+              const isHigh = risk.level.includes('HIGH');
+              const isMedium = risk.level.includes('MEDIUM');
+              const bgClass = isHigh
                 ? 'bg-red-950/10 border-red-900/30 text-red-200 glow-red' 
-                : risk.level === 'Medium'
+                : isMedium
                 ? 'bg-yellow-950/10 border-yellow-900/20 text-yellow-200'
                 : 'bg-emerald-950/10 border-emerald-900/20 text-emerald-200';
+              
+              const isExpanded = !!expandedDetails[index];
               
               return (
                 <div key={index} class={`p-5 border rounded-xl flex flex-col gap-2.5 text-xs leading-relaxed ${bgClass}`}>
                   <div class="flex items-center justify-between">
                     <span class="font-bold text-slate-100">{risk.name}</span>
                     <span class={`px-2 py-0.5 text-[9px] font-extrabold uppercase rounded border ${
-                      risk.level === 'High' ? 'bg-red-500/20 text-red-400 border-red-800/30' : risk.level === 'Medium' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-800/30' : 'bg-emerald-500/10 text-emerald-400 border-emerald-800/30'
+                      isHigh ? 'bg-red-500/20 text-red-400 border-red-800/30' : isMedium ? 'bg-yellow-500/10 text-yellow-400 border-yellow-800/30' : 'bg-emerald-500/10 text-emerald-400 border-emerald-800/30'
                     }`}>
-                      {risk.level} Risk
+                      {risk.level}
                     </span>
                   </div>
-                  <div class="space-y-1 text-slate-300 font-medium text-[11px]">
-                    <p><strong>Why:</strong> {risk.why}</p>
-                    <p><strong>Evidence:</strong> {risk.evidence}</p>
+
+                  <div class="space-y-1.5">
+                    <div>
+                      <span class="text-[9px] text-slate-400 font-bold block uppercase">Meaning</span>
+                      <p class="text-[11px] text-slate-200 font-semibold">{risk.why}</p>
+                    </div>
+                    <div>
+                      <span class="text-[9px] text-slate-400 font-bold block uppercase">Evidence</span>
+                      <p class="text-[11px] text-slate-300 font-medium">{risk.evidence}</p>
+                    </div>
+                    <div>
+                      <span class="text-[9px] text-blue-400 font-bold block uppercase">Recommendation</span>
+                      <p class="text-[11px] text-slate-200 font-bold">{risk.action}</p>
+                    </div>
                   </div>
-                  <div class="p-2.5 bg-slate-950/60 border border-slate-900 rounded-lg">
-                    <span class="text-[9px] text-blue-400 font-extrabold uppercase tracking-wide block mb-0.5">Recommendation</span>
-                    <p class="text-[11px] text-slate-200 leading-normal font-semibold">{risk.action}</p>
+
+                  <div class="pt-1.5 border-t border-slate-800/40">
+                    <button 
+                      onClick={() => toggleDetails(index)} 
+                      class="text-blue-400 hover:text-blue-300 font-bold text-[11px] flex items-center gap-1 focus:outline-none transition-colors cursor-pointer"
+                    >
+                      {isExpanded ? 'Hide details' : 'View details'}
+                    </button>
+                    {isExpanded && (
+                      <div class="mt-2 p-2.5 bg-slate-950/80 border border-slate-900 rounded-lg text-slate-400 text-[10px] space-y-1 font-medium leading-relaxed animate-fade-in">
+                        <p>This automated strategic assessment runs diagnostic scans on YoY billing volatility and concentration levels across Cochin Port financial records. Projections are parsed monthly using regression forecasting models.</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -218,26 +308,34 @@ export default function Predictive({ token, selectedYear, activeTab }) {
             </div>
           ) : (
             <div class="space-y-3">
-              {data.atRiskCustomers.map((c, i) => (
+              {displayedCustomers.map((c, i) => (
                 <div key={i} class="p-4 bg-slate-900/40 border border-slate-800/80 rounded-xl flex flex-col gap-2">
                   <div class="flex items-center justify-between">
                     <span class="text-slate-200 text-xs font-bold block">{c.name}</span>
                     <span class={`px-2 py-0.5 text-[9px] font-bold uppercase rounded ${
-                      c.riskLevel === 'High' ? 'bg-red-500/10 text-red-400 border border-red-800/20' : 'bg-yellow-500/10 text-yellow-400 border border-yellow-800/20'
+                      c.riskLevel.includes('HIGH') ? 'bg-red-500/10 text-red-400 border border-red-800/20' : 'bg-yellow-500/10 text-yellow-400 border border-yellow-800/20'
                     }`}>
-                      {c.riskLevel} Churn
+                      {c.riskLevel}
                     </span>
                   </div>
                   <div class="text-[10px] text-slate-400 space-y-1">
-                    <p><strong>Previous Revenue:</strong> {formatCurrency(c.previousRevenue)}</p>
-                    <p><strong>Latest Revenue:</strong> {formatCurrency(c.latestRevenue)}</p>
-                    <p><strong>Decline:</strong> <span class="text-rose-400 font-bold">-{formatCurrency(c.declineAmount)} (-{c.declinePercentage.toFixed(1)}%)</span></p>
+                    <p class="text-rose-400 font-bold">-{c.declinePercentage.toFixed(1)}% decline</p>
+                    <p class="font-medium">{formatCurrency(c.previousRevenue)} → {formatCurrency(c.latestRevenue)}</p>
                     <p class="text-[11px] text-slate-300 mt-1 font-semibold leading-normal">
-                      <strong>Reason:</strong> {c.reason}
+                      {c.reason}
                     </p>
                   </div>
                 </div>
               ))}
+
+              {(data?.atRiskCustomers || []).length > 5 && (
+                <button
+                  onClick={() => setShowAllCustomers(!showAllCustomers)}
+                  class="w-full py-2 bg-slate-900/80 hover:bg-slate-900 border border-slate-850 rounded-xl text-xs font-bold text-blue-400 transition-colors focus:outline-none cursor-pointer mt-1"
+                >
+                  {showAllCustomers ? 'Show less' : 'View all at-risk customers'}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -255,26 +353,34 @@ export default function Predictive({ token, selectedYear, activeTab }) {
             </div>
           ) : (
             <div class="space-y-3">
-              {data.decliningCommodities.map((cc, i) => (
+              {displayedCommodities.map((cc, i) => (
                 <div key={i} class="p-4 bg-slate-900/40 border border-slate-800/80 rounded-xl flex flex-col gap-2">
                   <div class="flex items-center justify-between">
                     <span class="text-slate-200 text-xs font-bold block">{cc.name}</span>
                     <span class={`px-2 py-0.5 text-[9px] font-bold uppercase rounded ${
-                      cc.riskLevel === 'High' ? 'bg-red-500/10 text-red-400 border border-red-800/20' : 'bg-yellow-500/10 text-yellow-400 border border-yellow-800/20'
+                      cc.riskLevel.includes('HIGH') ? 'bg-red-500/10 text-red-400 border border-red-800/20' : 'bg-yellow-500/10 text-yellow-400 border border-yellow-800/20'
                     }`}>
-                      {cc.riskLevel} Decline
+                      {cc.riskLevel}
                     </span>
                   </div>
                   <div class="text-[10px] text-slate-400 space-y-1">
-                    <p><strong>Previous Revenue:</strong> {formatCurrency(cc.previousRevenue)}</p>
-                    <p><strong>Latest Revenue:</strong> {formatCurrency(cc.latestRevenue)}</p>
-                    <p><strong>Decline:</strong> <span class="text-rose-400 font-bold">-{formatCurrency(cc.declineAmount)} (-{cc.declinePercentage.toFixed(1)}%)</span></p>
+                    <p class="text-rose-400 font-bold">-{cc.declinePercentage.toFixed(1)}% decline</p>
+                    <p class="font-medium">{formatCurrency(cc.previousRevenue)} → {formatCurrency(cc.latestRevenue)}</p>
                     <p class="text-[11px] text-slate-300 mt-1 font-semibold leading-normal">
-                      <strong>Reason:</strong> {cc.reason}
+                      {cc.reason}
                     </p>
                   </div>
                 </div>
               ))}
+
+              {(data?.decliningCommodities || []).length > 5 && (
+                <button
+                  onClick={() => setShowAllCommodities(!showAllCommodities)}
+                  class="w-full py-2 bg-slate-900/80 hover:bg-slate-900 border border-slate-850 rounded-xl text-xs font-bold text-blue-400 transition-colors focus:outline-none cursor-pointer mt-1"
+                >
+                  {showAllCommodities ? 'Show less' : 'View all declining commodities'}
+                </button>
+              )}
             </div>
           )}
         </div>
