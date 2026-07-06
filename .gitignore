@@ -3,24 +3,12 @@ node_modules/
 node/
 nodejs/
 
-# SQLite database
-database.sqlite
-*.sqlite
-*.sqlite3
-
-# Local logs & configurations
-.env
+# Local logs
 *.log
 .agents/
 .gemini/
 
-# Build outputs
-dist/
-build/
-out/
-
 # IDE / Editor configurations
-.vscode/
 .idea/
 *.suo
 *.ntvs*
@@ -37,3 +25,14 @@ tmp/
 temp/
 brain/
 scratch/
+
+# Keep .env out of git (set env vars on Railway dashboard instead)
+.env
+
+# Keep dist/ out of git (Railway will build it)
+dist/
+build/
+out/
+
+# Keep vscode out
+.vscode/

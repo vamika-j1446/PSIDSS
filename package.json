@@ -1,0 +1,13 @@
+{
+  "name": "copa-psidss",
+  "version": "1.0.0",
+  "description": "Port Strategic Intelligence Decision Support System",
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build",
+    "start": "cd backend && npm install && node src/server.js",
+    "postinstall": "npm run build"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
