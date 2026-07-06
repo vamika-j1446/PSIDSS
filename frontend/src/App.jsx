@@ -79,7 +79,7 @@ export default function App() {
     { id: 'strategic', label: 'Strategic Risks', icon: ShieldAlert, roles: ['Viewer', 'Analyst', 'Admin'] },
     { id: 'predictive', label: 'Predictive Insights', icon: Sparkles, roles: ['Viewer', 'Analyst', 'Admin'] },
     { id: 'gantt', label: 'Berth Timeline', icon: Anchor, roles: ['Viewer', 'Analyst', 'Admin', 'Party', 'VCN'] },
-    { id: 'sandbox', label: 'Simulation Sandbox', icon: Sliders, roles: ['Analyst', 'Admin'] },
+    { id: 'sandbox', label: 'Simulation Sandbox', icon: Sliders, roles: ['Viewer', 'Analyst', 'Admin', 'Party', 'VCN'] },
     { id: 'recommendations', label: 'Advisory Briefs', icon: Briefcase, roles: ['Viewer', 'Analyst', 'Admin'] },
     { id: 'admin', label: 'Report Manager', icon: Settings, roles: ['Admin'] }
   ];
@@ -220,7 +220,7 @@ export default function App() {
             {activeTab === 'gantt' && (
               <Gantt token={token} selectedYear={selectedYear} />
             )}
-            {['Analyst', 'Admin'].includes(user?.role) && activeTab === 'sandbox' && (
+            {['Viewer', 'Analyst', 'Admin', 'Party', 'VCN'].includes(user?.role) && activeTab === 'sandbox' && (
               <Sandbox token={token} selectedYear={selectedYear} activeTab={activeTab} />
             )}
             {['Viewer', 'Analyst', 'Admin'].includes(user?.role) && activeTab === 'recommendations' && (

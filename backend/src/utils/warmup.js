@@ -9,58 +9,42 @@ const years = ['Recent4', 'All'];
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function warmup() {
-  // Wait 1.5 seconds after server start to let the port establish first
-  await delay(1500);
+  // Wait 1 second after server start for port to open
+  await delay(1000);
+  console.log('Starting PSIDSS cache warmup for default scopes...');
 
-  console.log("Starting PSIDSS cache warmup for default scopes...");
   const mockRes = {
     json: () => {},
     status: () => ({ json: () => {} })
   };
-  
-  for (const year of years) {
-    const mockReq = { 
-      query: { year },
-      body: {} 
-    };
-    
-    try {
-      console.log(`Preheating cache for Year: ${year}...`);
-      
-      await dashboardController.getKPIs(mockReq, mockRes);
-      await delay(100);
-      
-      await historicalController.getRevenueTrends(mockReq, mockRes);
-      await delay(100);
-      
-      await historicalController.getCustomerShares(mockReq, mockRes);
-      await delay(100);
-      
-      await historicalController.getBerthTraffic(mockReq, mockRes);
-      await delay(100);
-      
-      await historicalController.getCommodityDistribution(mockReq, mockRes);
-      await delay(100);
-      
-      await historicalController.getGanttData(mockReq, mockRes);
-      await delay(100);
-      
-      await strategicController.getStrategicAnalysis(mockReq, mockRes);
-      await delay(100);
-      
-      await predictiveController.getForecasts(mockReq, mockRes);
-      await delay(100);
-      
-      await recommendationController.getRecommendations(mockReq, mockRes);
-      await delay(100);
-      
-      await simulationController.simulate(mockReq, mockRes);
-      await delay(250); // Pause between years
-    } catch (err) {
-      console.error(`PSIDSS Cache warmup error for year ${year}:`, err);
+
+  // Fire warmup for both year scopes simultaneously
+  await Promise.allSettled(years.map(async (year) => {
+    const mockReq = { query: { year }, body: {} };
+
+    // Within each year, fire ALL endpoints in parallel
+    const results = await Promise.allSettled([
+      dashboardController.getKPIs(mockReq, mockRes),
+      historicalController.getRevenueTrends(mockReq, mockRes),
+      historicalController.getCustomerShares(mockReq, mockRes),
+      historicalController.getBerthTraffic(mockReq, mockRes),
+      historicalController.getCommodityDistribution(mockReq, mockRes),
+      historicalController.getGanttData(mockReq, mockRes),
+      strategicController.getStrategicAnalysis(mockReq, mockRes),
+      predictiveController.getForecasts(mockReq, mockRes),
+      recommendationController.getRecommendations(mockReq, mockRes),
+      simulationController.simulate(mockReq, mockRes),
+    ]);
+
+    const failed = results.filter(r => r.status === 'rejected');
+    if (failed.length > 0) {
+      console.warn(`Warmup: ${failed.length} endpoint(s) failed for year=${year}`);
+    } else {
+      console.log(`Warmup: all endpoints cached for year=${year}`);
     }
-  }
-  console.log("PSIDSS Cache warmup completed successfully for default scopes! 🚀");
+  }));
+
+  console.log('PSIDSS Cache warmup completed successfully! 🚀');
 }
 
 module.exports = warmup;

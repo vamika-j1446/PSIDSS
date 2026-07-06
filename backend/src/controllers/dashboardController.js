@@ -130,246 +130,102 @@ const dashboardController = {
         .map((_, index) => `UPPER(category) NOT LIKE :servicePattern${index}`)
         .join(' AND ');
 
+      const serviceFilterSqlSelect = serviceKeywords
+        .map((_, index) => `UPPER(${categoryExpression}) NOT LIKE :servicePattern${index}`)
+        .join(' AND ');
+
       const serviceReplacements = {};
       serviceKeywords.forEach((keyword, index) => {
         serviceReplacements[`servicePattern${index}`] = `%${keyword}%`;
       });
 
       // ---------------------------------------------------------
-      // 1. Total Revenue and Transactions
+      // Run all independent SQL queries in PARALLEL for maximum speed
       // ---------------------------------------------------------
-
-      const revenueResult = await sequelize.query(
-        `
-        SELECT
-          COALESCE(SUM(invoice_amount), 0) AS totalRevenue,
-          COUNT(*) AS totalTransactions
-        FROM PortRecords
-        ${filter.whereClause}
-        `,
-        {
-          type: QueryTypes.SELECT,
-          replacements: filter.replacements
-        }
-      );
-
-      const totalRevenue = parseFloat(revenueResult[0]?.totalRevenue) || 0;
-      const totalTransactions = parseInt(revenueResult[0]?.totalTransactions, 10) || 0;
-
-      // ---------------------------------------------------------
-      // 2. Total Vessels
-      // ---------------------------------------------------------
-
-      const vesselResult = await sequelize.query(
-        `
-        SELECT COUNT(DISTINCT vessel_name) AS totalVessels
-        FROM PortRecords
-        WHERE vessel_name IS NOT NULL
-        AND TRIM(vessel_name) != ''
-        ${filter.andClause}
-        `,
-        {
-          type: QueryTypes.SELECT,
-          replacements: filter.replacements
-        }
-      );
-
-      const totalVessels = parseInt(vesselResult[0]?.totalVessels, 10) || 0;
-
-      // ---------------------------------------------------------
-      // 3. Total Customers
-      // ---------------------------------------------------------
-
-      const customerResult = await sequelize.query(
-        `
-        SELECT COUNT(DISTINCT party_name) AS totalCustomers
-        FROM PortRecords
-        WHERE party_name IS NOT NULL
-        AND TRIM(party_name) != ''
-        ${filter.andClause}
-        `,
-        {
-          type: QueryTypes.SELECT,
-          replacements: filter.replacements
-        }
-      );
-
-      const totalCustomers = parseInt(customerResult[0]?.totalCustomers, 10) || 0;
-
-      // ---------------------------------------------------------
-      // 4. Total Berths
-      // ---------------------------------------------------------
-
-      const berthResult = await sequelize.query(
-        `
-        SELECT COUNT(DISTINCT berth) AS totalBerths
-        FROM PortRecords
-        WHERE berth IS NOT NULL
-        AND TRIM(berth) != ''
-        ${filter.andClause}
-        `,
-        {
-          type: QueryTypes.SELECT,
-          replacements: filter.replacements
-        }
-      );
-
-      const totalBerths = parseInt(berthResult[0]?.totalBerths, 10) || 0;
-
-      // ---------------------------------------------------------
-      // 5. Total Commodity/Cargo Categories
-      // Uses commodity_group first, then commodity.
-      // Excludes billing/service entries.
-      // ---------------------------------------------------------
-
-      const commodityResult = await sequelize.query(
-        `
-        SELECT COUNT(DISTINCT category) AS totalCommodities
-        FROM (
-          SELECT ${categoryExpression} AS category
+      const [
+        combinedResult,
+        grtResult,
+        topBerthResult,
+        topCommodityResult,
+        topCustomerResult,
+        scopeYearlyRevenues
+      ] = await Promise.all([
+        // 1. Combined Core KPIs
+        sequelize.query(
+          `SELECT
+            COALESCE(SUM(invoice_amount), 0) AS totalRevenue,
+            COUNT(*) AS totalTransactions,
+            COUNT(DISTINCT CASE WHEN vessel_name IS NOT NULL AND TRIM(vessel_name) != '' THEN vessel_name END) AS totalVessels,
+            COUNT(DISTINCT CASE WHEN party_name IS NOT NULL AND TRIM(party_name) != '' THEN party_name END) AS totalCustomers,
+            COUNT(DISTINCT CASE WHEN berth IS NOT NULL AND TRIM(berth) != '' THEN berth END) AS totalBerths,
+            COUNT(DISTINCT CASE WHEN ${categoryExpression} IS NOT NULL AND TRIM(${categoryExpression}) != '' AND ${serviceFilterSqlSelect} THEN ${categoryExpression} END) AS totalCommodities
           FROM PortRecords
-          ${filter.whereClause}
-        ) AS t
-        WHERE category IS NOT NULL
-        AND TRIM(category) != ''
-        AND ${serviceFilterSql}
-        `,
-        {
-          type: QueryTypes.SELECT,
-          replacements: {
-            ...filter.replacements,
-            ...serviceReplacements
-          }
-        }
-      );
-
-      const totalCommodities = parseInt(commodityResult[0]?.totalCommodities, 10) || 0;
-
-      // ---------------------------------------------------------
-      // 6. Total GRT
-      // Sum one GRT per VCN to avoid double counting.
-      // ---------------------------------------------------------
-
-      const grtResult = await sequelize.query(
-        `
-        SELECT COALESCE(SUM(max_grt), 0) AS totalGRT
-        FROM (
-          SELECT vcn, MAX(grt) AS max_grt
+          ${filter.whereClause}`,
+          { type: QueryTypes.SELECT, replacements: { ...filter.replacements, ...serviceReplacements } }
+        ),
+        // 2. Total GRT
+        sequelize.query(
+          `SELECT COALESCE(SUM(max_grt), 0) AS totalGRT
+          FROM (
+            SELECT vcn, MAX(grt) AS max_grt
+            FROM PortRecords
+            WHERE vcn IS NOT NULL AND TRIM(vcn) != ''
+            ${filter.andClause}
+            GROUP BY vcn
+          ) AS t`,
+          { type: QueryTypes.SELECT, replacements: filter.replacements }
+        ),
+        // 3. Top Berth
+        sequelize.query(
+          `SELECT berth, COALESCE(SUM(invoice_amount), 0) AS revenue
           FROM PortRecords
-          WHERE vcn IS NOT NULL
-          AND TRIM(vcn) != ''
+          WHERE berth IS NOT NULL AND TRIM(berth) != ''
           ${filter.andClause}
-          GROUP BY vcn
-        ) AS t
-        `,
-        {
-          type: QueryTypes.SELECT,
-          replacements: filter.replacements
-        }
-      );
-
-      const totalGRT = parseFloat(grtResult[0]?.totalGRT) || 0;
-
-      // ---------------------------------------------------------
-      // 7. Top Berth by Revenue
-      // ---------------------------------------------------------
-
-      const topBerthResult = await sequelize.query(
-        `
-        SELECT berth, COALESCE(SUM(invoice_amount), 0) AS revenue
-        FROM PortRecords
-        WHERE berth IS NOT NULL
-        AND TRIM(berth) != ''
-        ${filter.andClause}
-        GROUP BY berth
-        ORDER BY revenue DESC
-        LIMIT 1
-        `,
-        {
-          type: QueryTypes.SELECT,
-          replacements: filter.replacements
-        }
-      );
-
-      const topBerth = topBerthResult[0]?.berth || 'N/A';
-
-      // ---------------------------------------------------------
-      // 8. Top Commodity/Cargo Category by Revenue
-      // Uses commodity_group first, then commodity.
-      // Excludes services and billing charge names.
-      // ---------------------------------------------------------
-
-      const topCommodityResult = await sequelize.query(
-        `
-        SELECT category AS commodity, COALESCE(SUM(invoice_amount), 0) AS revenue
-        FROM (
-          SELECT
-            ${categoryExpression} AS category,
-            invoice_amount
+          GROUP BY berth ORDER BY revenue DESC LIMIT 1`,
+          { type: QueryTypes.SELECT, replacements: filter.replacements }
+        ),
+        // 4. Top Commodity
+        sequelize.query(
+          `SELECT category AS commodity, COALESCE(SUM(invoice_amount), 0) AS revenue
+          FROM (
+            SELECT ${categoryExpression} AS category, invoice_amount
+            FROM PortRecords ${filter.whereClause}
+          ) AS t
+          WHERE category IS NOT NULL AND TRIM(category) != '' AND ${serviceFilterSql}
+          GROUP BY category ORDER BY revenue DESC LIMIT 1`,
+          { type: QueryTypes.SELECT, replacements: { ...filter.replacements, ...serviceReplacements } }
+        ),
+        // 5. Top Customer
+        sequelize.query(
+          `SELECT party_name, COALESCE(SUM(invoice_amount), 0) AS revenue
+          FROM PortRecords
+          WHERE party_name IS NOT NULL AND TRIM(party_name) != ''
+          ${filter.andClause}
+          GROUP BY party_name ORDER BY revenue DESC LIMIT 1`,
+          { type: QueryTypes.SELECT, replacements: filter.replacements }
+        ),
+        // 6. Yearly Revenue
+        sequelize.query(
+          `SELECT source_year AS year, COALESCE(SUM(invoice_amount), 0) AS revenue
           FROM PortRecords
           ${filter.whereClause}
-        ) AS t
-        WHERE category IS NOT NULL
-        AND TRIM(category) != ''
-        AND ${serviceFilterSql}
-        GROUP BY category
-        ORDER BY revenue DESC
-        LIMIT 1
-        `,
-        {
-          type: QueryTypes.SELECT,
-          replacements: {
-            ...filter.replacements,
-            ...serviceReplacements
-          }
-        }
-      );
+          GROUP BY source_year
+          HAVING source_year IS NOT NULL
+          ORDER BY source_year ASC`,
+          { type: QueryTypes.SELECT, replacements: filter.replacements }
+        )
+      ]);
 
+      const totalRevenue = parseFloat(combinedResult[0]?.totalRevenue) || 0;
+      const totalTransactions = parseInt(combinedResult[0]?.totalTransactions, 10) || 0;
+      const totalVessels = parseInt(combinedResult[0]?.totalVessels, 10) || 0;
+      const totalCustomers = parseInt(combinedResult[0]?.totalCustomers, 10) || 0;
+      const totalBerths = parseInt(combinedResult[0]?.totalBerths, 10) || 0;
+      const totalCommodities = parseInt(combinedResult[0]?.totalCommodities, 10) || 0;
+      const totalGRT = parseFloat(grtResult[0]?.totalGRT) || 0;
+      const topBerth = topBerthResult[0]?.berth || 'N/A';
       const topCommodity = topCommodityResult[0]?.commodity || 'N/A';
-
-      // ---------------------------------------------------------
-      // 9. Top Customer by Revenue
-      // ---------------------------------------------------------
-
-      const topCustomerResult = await sequelize.query(
-        `
-        SELECT party_name, COALESCE(SUM(invoice_amount), 0) AS revenue
-        FROM PortRecords
-        WHERE party_name IS NOT NULL
-        AND TRIM(party_name) != ''
-        ${filter.andClause}
-        GROUP BY party_name
-        ORDER BY revenue DESC
-        LIMIT 1
-        `,
-        {
-          type: QueryTypes.SELECT,
-          replacements: filter.replacements
-        }
-      );
-
       const topCustomer = topCustomerResult[0]?.party_name || 'N/A';
-
-      // ---------------------------------------------------------
-      // 10. Yearly Revenue List for Calculations
-      // ---------------------------------------------------------
-
-      const scopeYearlyRevenues = await sequelize.query(
-        `
-        SELECT
-          source_year AS year,
-          COALESCE(SUM(invoice_amount), 0) AS revenue
-        FROM PortRecords
-        ${filter.whereClause}
-        GROUP BY source_year
-        HAVING source_year IS NOT NULL
-        ORDER BY source_year ASC
-        `,
-        {
-          type: QueryTypes.SELECT,
-          replacements: filter.replacements
-        }
-      );
 
       let cagr = 0;
       let overallGrowth = 0;
@@ -378,22 +234,14 @@ const dashboardController = {
       if (scopeYearlyRevenues.length >= 2) {
         const firstRow = scopeYearlyRevenues[0];
         const lastRow = scopeYearlyRevenues[scopeYearlyRevenues.length - 1];
-
         const firstRev = parseFloat(firstRow.revenue) || 0;
         const lastRev = parseFloat(lastRow.revenue) || 0;
-
         const firstYearVal = parseInt(firstRow.year, 10);
         const lastYearVal = parseInt(lastRow.year, 10);
-
         const nYears = lastYearVal - firstYearVal;
-
         if (firstRev > 0 && lastRev > 0) {
           overallGrowth = ((lastRev - firstRev) / firstRev) * 100;
-
-          if (nYears > 0) {
-            cagr = (Math.pow(lastRev / firstRev, 1 / nYears) - 1) * 100;
-          }
-
+          if (nYears > 0) cagr = (Math.pow(lastRev / firstRev, 1 / nYears) - 1) * 100;
           if (String(year) === 'All' || String(year) === 'All Fiscal Years' || String(year) === 'Recent4') {
             growthPercentage = cagr;
           } else {
@@ -402,167 +250,83 @@ const dashboardController = {
         }
       }
 
-      // ---------------------------------------------------------
-      // 11. Highest Revenue Year
-      // ---------------------------------------------------------
-
       let highestRevenueYear = 'N/A';
-
       if (scopeYearlyRevenues.length > 0) {
         const highestYearRow = scopeYearlyRevenues.reduce((best, current) => {
-          const bestRevenue = parseFloat(best.revenue) || 0;
-          const currentRevenue = parseFloat(current.revenue) || 0;
-          return currentRevenue > bestRevenue ? current : best;
+          return (parseFloat(current.revenue) || 0) > (parseFloat(best.revenue) || 0) ? current : best;
         }, scopeYearlyRevenues[0]);
-
         highestRevenueYear = highestYearRow?.year || 'N/A';
       }
-
-      // ---------------------------------------------------------
-      // 12. Fastest Growing Revenue Category
-      // This replaces incorrect charge_name based logic.
-      // ---------------------------------------------------------
-
-      let fastestGrowingCommodity = 'N/A';
 
       const availableYears = scopeYearlyRevenues
         .map((row) => parseInt(row.year, 10))
         .filter((value) => !Number.isNaN(value));
-
       const latestYear = availableYears.length ? availableYears[availableYears.length - 1] : null;
       const prevYear = availableYears.length > 1 ? availableYears[availableYears.length - 2] : null;
 
+      // Run growth + risk queries in parallel (only if we have two years to compare)
+      let fastestGrowingCommodity = 'N/A';
+      let largestBusinessRisk = 'None';
+
       if (latestYear && prevYear) {
-        const growthRows = await sequelize.query(
-          `
-          SELECT
-            category,
-            SUM(CASE WHEN source_year = :prevYear THEN invoice_amount ELSE 0 END) AS prevRev,
-            SUM(CASE WHEN source_year = :latestYear THEN invoice_amount ELSE 0 END) AS latestRev
-          FROM (
-            SELECT
-              ${categoryExpression} AS category,
-              source_year,
-              invoice_amount
+        const [growthRows, customerLosses] = await Promise.all([
+          sequelize.query(
+            `SELECT category,
+              SUM(CASE WHEN source_year = :prevYear THEN invoice_amount ELSE 0 END) AS prevRev,
+              SUM(CASE WHEN source_year = :latestYear THEN invoice_amount ELSE 0 END) AS latestRev
+            FROM (
+              SELECT ${categoryExpression} AS category, source_year, invoice_amount
+              FROM PortRecords ${filter.whereClause}
+            ) AS t
+            WHERE category IS NOT NULL AND TRIM(category) != '' AND ${serviceFilterSql}
+            GROUP BY category`,
+            { type: QueryTypes.SELECT, replacements: { ...filter.replacements, ...serviceReplacements, prevYear, latestYear } }
+          ),
+          sequelize.query(
+            `SELECT party_name,
+              SUM(CASE WHEN source_year = :prevYear THEN invoice_amount ELSE 0 END) AS prevRev,
+              SUM(CASE WHEN source_year = :latestYear THEN invoice_amount ELSE 0 END) AS latestRev
             FROM PortRecords
-            ${filter.whereClause}
-          ) AS t
-          WHERE category IS NOT NULL
-          AND TRIM(category) != ''
-          AND ${serviceFilterSql}
-          GROUP BY category
-          `,
-          {
-            type: QueryTypes.SELECT,
-            replacements: {
-              ...filter.replacements,
-              ...serviceReplacements,
-              prevYear,
-              latestYear
-            }
-          }
-        );
+            WHERE party_name IS NOT NULL AND TRIM(party_name) != ''
+            AND source_year IN (:prevYear, :latestYear)
+            ${filter.andClause}
+            GROUP BY party_name`,
+            { type: QueryTypes.SELECT, replacements: { ...filter.replacements, prevYear, latestYear } }
+          )
+        ]);
 
         let maxGrowth = -Infinity;
-
         growthRows.forEach((row) => {
           const prev = parseFloat(row.prevRev) || 0;
           const latest = parseFloat(row.latestRev) || 0;
-
           if (prev >= 1000000 && latest > prev) {
             const growth = ((latest - prev) / prev) * 100;
-
             if (growth > maxGrowth) {
               maxGrowth = growth;
               fastestGrowingCommodity = `${row.category} (+${growth.toFixed(1)}% YoY)`;
             }
           }
         });
-      }
-
-      // ---------------------------------------------------------
-      // 13. Largest Business Risk
-      // Customer revenue contraction based on latest vs previous year.
-      // ---------------------------------------------------------
-
-      let largestBusinessRisk = 'None';
-
-      if (latestYear && prevYear) {
-        const customerLosses = await sequelize.query(
-          `
-          SELECT
-            party_name,
-            SUM(CASE WHEN source_year = :prevYear THEN invoice_amount ELSE 0 END) AS prevRev,
-            SUM(CASE WHEN source_year = :latestYear THEN invoice_amount ELSE 0 END) AS latestRev
-          FROM PortRecords
-          WHERE party_name IS NOT NULL
-          AND TRIM(party_name) != ''
-          ${filter.andClause}
-          GROUP BY party_name
-          `,
-          {
-            type: QueryTypes.SELECT,
-            replacements: {
-              ...filter.replacements,
-              prevYear,
-              latestYear
-            }
-          }
-        );
 
         let maxLoss = 0;
         let worstCustomer = '';
-
         customerLosses.forEach((row) => {
           const prev = parseFloat(row.prevRev) || 0;
           const latest = parseFloat(row.latestRev) || 0;
-
           if (prev >= 1000000 && latest < prev) {
             const loss = prev - latest;
-
-            if (loss > maxLoss) {
-              maxLoss = loss;
-              worstCustomer = row.party_name;
-            }
+            if (loss > maxLoss) { maxLoss = loss; worstCustomer = row.party_name; }
           }
         });
-
         if (worstCustomer) {
           largestBusinessRisk = `Customer revenue decline: ${worstCustomer} (-${formatCurrency(maxLoss)})`;
         }
       }
 
-      // ---------------------------------------------------------
-      // 14. Yearly Revenue Trend
-      // ---------------------------------------------------------
-
       const yearlyTrend = scopeYearlyRevenues.map((row) => ({
         year: row.year,
         revenue: parseFloat(row.revenue) || 0
       }));
-
-      // ---------------------------------------------------------
-      // 15. Debug Output
-      // ---------------------------------------------------------
-
-      console.log(`[DEBUG] SQL KPI Query Results (year=${year}):`, {
-        totalRevenue,
-        totalTransactions,
-        totalCustomers,
-        totalVessels,
-        totalCommodities,
-        totalBerths,
-        totalGRT,
-        topBerth,
-        topCommodity,
-        topCustomer,
-        fastestGrowingCommodity,
-        largestBusinessRisk,
-        growthPercentage,
-        cagr,
-        overallGrowth,
-        yearlyTrend
-      });
 
       const responseData = {
         totalRevenue,

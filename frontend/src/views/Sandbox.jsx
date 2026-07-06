@@ -44,7 +44,7 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
       }
     } catch (err) {
       console.error(err);
-      setError('Failed to run simulation. Ensure your account has Analyst/Admin permissions.');
+      setError('Failed to run simulation. Ensure your session is active and check database connections.');
     } finally {
       setLoading(false);
       fetchingRef.current = false;

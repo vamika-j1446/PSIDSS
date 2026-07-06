@@ -114,7 +114,7 @@ app.get(
 app.post(
   '/api/simulation/run',
   authenticateJWT,
-  requireRole(['Analyst', 'Admin']),
+  requireRole(['Viewer', 'Analyst', 'Admin', 'Party', 'VCN']),
   simulationController.simulate
 );
 
@@ -423,6 +423,13 @@ async function startServer() {
       await sequelize.query('CREATE INDEX IF NOT EXISTS idx_port_party ON PortRecords(party_name);');
       await sequelize.query('CREATE INDEX IF NOT EXISTS idx_port_commodity_group ON PortRecords(commodity_group);');
       await sequelize.query('CREATE INDEX IF NOT EXISTS idx_port_commodity ON PortRecords(commodity);');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_port_vcn ON PortRecords(vcn);');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_port_ata ON PortRecords(ata);');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_port_vessel_name ON PortRecords(vessel_name);');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_port_year_berth ON PortRecords(source_year, berth);');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_port_year_party ON PortRecords(source_year, party_name);');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_port_year_commodity ON PortRecords(source_year, commodity);');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_port_year_commodity_group ON PortRecords(source_year, commodity_group);');
       console.log('SQLite indexes verified successfully.');
     } catch (indexErr) {
       console.error('Error creating database indexes:', indexErr);
