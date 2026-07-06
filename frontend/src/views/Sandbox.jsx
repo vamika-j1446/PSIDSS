@@ -12,6 +12,7 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
   const [tariffPct, setTariffPct] = useState(10);
   
   const [simulationData, setSimulationData] = useState(null);
+  const [historicalSeries, setHistoricalSeries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -19,7 +20,7 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
   const [localBerth, setLocalBerth] = useState('All Berths');
   const [berthList, setBerthList] = useState(['All Berths']);
 
-  // Run simulation on slider/dropdown changes
+  // Run simulation only when berth, year or token changes (not on tariffPct changes)
   useEffect(() => {
     const runSimulation = async () => {
       setLoading(true);
@@ -29,9 +30,12 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
         const response = await axios.post('/api/simulation/run', {
           selectedBerth: localBerth,
           yearScope: selectedYear,
-          tariffPercent: tariffPct
+          tariffPercent: 0 // Query with base baseline tariff percentage
         }, config);
         setSimulationData(response.data);
+        if (response.data && response.data.projection) {
+          setHistoricalSeries(response.data.projection);
+        }
       } catch (err) {
         console.error(err);
         setError('Failed to run simulation. Ensure your account has Analyst/Admin permissions.');
@@ -45,7 +49,7 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
     }, 250);
 
     return () => clearTimeout(delayDebounce);
-  }, [tariffPct, token, selectedYear, localBerth]);
+  }, [token, selectedYear, localBerth]);
 
   // Synchronize dropdown options with backend berths array
   useEffect(() => {
@@ -66,12 +70,32 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
     return `₹${num.toLocaleString('en-IN')}`;
   };
 
-  // Calculate overall metrics from API response
+  // Calculate overall metrics locally based on tariffPct
   const totalBase = simulationData?.baseRevenue ?? 0;
-  const totalSim = simulationData?.simulatedRevenue ?? 0;
-  const revDiff = simulationData?.revenueDelta ?? 0;
-  const pctChange = simulationData?.tariffPercent ?? tariffPct;
-  const additionalRev = simulationData?.additionalNet ?? 0;
+  const totalSim = totalBase * (1 + tariffPct / 100);
+  const revDiff = totalSim - totalBase;
+  const pctChange = tariffPct;
+
+  // Recalculate projectionData dynamically when tariffPct changes
+  const multiplier = 1 + tariffPct / 100;
+  const chartData = historicalSeries.map(row => {
+    const hist = Number(row.historicalRevenue || row.revenue || 0);
+    return {
+      ...row,
+      historicalRevenue: hist,
+      simulatedRevenue: hist * multiplier,
+      revenueDelta: hist * (tariffPct / 100)
+    };
+  });
+
+  const getDiagnosticMessage = () => {
+    const sign = tariffPct >= 0 ? '+' : '';
+    const share = simulationData?.diagnostics?.revenueShare ?? 0;
+    if (localBerth === 'All' || localBerth === 'All Berths') {
+      return `A ${sign}${tariffPct}% tariff adjustment increases estimated revenue from ${formatCurrency(totalBase)} to ${formatCurrency(totalSim)}, creating ${formatCurrency(revDiff)} additional revenue. This is based on all selected historical billing records.`;
+    }
+    return `This berth contributes ${share}% of selected-scope revenue. A ${sign}${tariffPct}% tariff adjustment creates ${formatCurrency(revDiff)} additional estimated revenue.`;
+  };
 
   return (
     <div class="space-y-8 animate-fade-in pb-12">
@@ -234,25 +258,24 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
                 <div class="flex justify-between">
                   <span>Selected scope:</span>
                   <span class="text-slate-200">{simulationData?.yearScope || selectedYear}</span>
-                </div>
-                <div class="flex justify-between">
+                               <div class="flex justify-between">
                   <span>Total historical revenue:</span>
-                  <span class="text-slate-200">{formatCurrency(simulationData?.diagnostics?.historicalRevenue || 0)}</span>
+                  <span class="text-slate-200">{formatCurrency(totalBase)}</span>
                 </div>
                 <div class="flex justify-between">
                   <span>Simulated revenue:</span>
-                  <span class="text-slate-200">{formatCurrency(simulationData?.diagnostics?.simulatedRevenue || 0)}</span>
+                  <span class="text-slate-200">{formatCurrency(totalSim)}</span>
                 </div>
                 <div class="flex justify-between">
                   <span>Revenue Difference:</span>
                   <span class={`font-bold ${revDiff >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {revDiff >= 0 ? '+' : ''}{formatCurrency(simulationData?.diagnostics?.additionalRevenue || 0)} ({pctChange >= 0 ? '+' : ''}{pctChange}%)
+                    {revDiff >= 0 ? '+' : ''}{formatCurrency(revDiff)} ({pctChange >= 0 ? '+' : ''}{pctChange}%)
                   </span>
                 </div>
                 <div class="flex justify-between">
                   <span>Tariff Revenue Impact:</span>
                   <span class="text-blue-400 font-mono font-bold">
-                    {formatCurrency(simulationData?.diagnostics?.additionalRevenue || 0)}
+                    {formatCurrency(revDiff)}
                   </span>
                 </div>
                 {localBerth !== 'All' && localBerth !== 'All Berths' && (
@@ -300,7 +323,7 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
                         )}
                       </div>
                       <p class="text-[11px] text-slate-300 leading-relaxed font-medium pt-1">
-                        {simulationData.diagnostics.message}
+                        {getDiagnosticMessage()}
                       </p>
                     </div>
                     
@@ -331,12 +354,12 @@ export default function Sandbox({ token, selectedYear, activeTab }) {
                 </p>
               ) : (() => {
                 const maxChartVal = Math.max(
-                  ...simulationData.projection.map(p => Math.max(p.historicalRevenue, p.simulatedRevenue))
+                  ...chartData.map(p => Math.max(p.historicalRevenue, p.simulatedRevenue))
                 );
 
                 return (
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart key={`${selectedYear}_${activeTab}`} data={simulationData.projection} margin={{ top: 10, right: 10, left: -15, bottom: 5 }}>
+                    <LineChart key={`${selectedYear}_${activeTab}`} data={chartData} margin={{ top: 10, right: 10, left: -15, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                       <XAxis dataKey="year" stroke="#64748b" />
                       <YAxis 
